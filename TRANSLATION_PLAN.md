@@ -810,3 +810,237 @@ A Python module that can:
 - [ ] Emulator auto-detection works for all 3 emulators
 - [ ] Zoom out function works
 - [ ] Window embedding/docking works (if GUI available)
+
+---
+
+## 8. Phase 3: Vision & Image Recognition
+
+**Priority**: CRITICAL — replaces proprietary MBRBot.dll
+**Source lines**: ~4,476 (Image Search/ + Pixels/ + Read Text/)
+**Target files**: ~10 Python modules
+**Dependencies**: Phase 1 (config), Phase 2 (screen capture)
+**Risk**: HIGHEST phase — must match MBRBot.dll accuracy
+
+### 8.1 MBRBot.dll API Replacement
+
+The bot calls 16 unique functions in MBRBot.dll via `DllCallMyBot()`. Every one must be replicated:
+
+| MBRBot.dll Function | Called From | What It Does | Python Replacement |
+|---------------------|------------|--------------|-------------------|
+| `SearchMultipleTilesBetweenLevels` | multiSearch, WeakBase, DonateCC, QuickMIS, imglocCheckWall, TrainSystem | Search multiple XML templates in a directory, filtered by level range, within a defined area | `template_search_multi()` — loop `cv2.matchTemplate()` over directory of templates |
+| `FindTile` | imglocAuxiliary, TrainIt | Find single template match | `template_search_single()` — `cv2.matchTemplate()` on one template |
+| `SearchRedLines` | imglocAuxiliary | Detect red deployment boundary | `detect_red_lines()` — `cv2.inRange()` for red color + `cv2.findContours()` |
+| `GetProperty` | multiSearch, QuickMIS, imglocAuxiliary | Get metadata from last search (redline, objectpoints, totalobjects) | Return metadata from Python search result object |
+| `getRedArea` | _GetRedArea | Get full red deployment zone | `detect_red_area()` — color-based contour detection |
+| `getRedAreaSideBuilding` | _GetRedArea | Get red area near specific building type | `detect_red_area_near()` — filtered contour detection |
+| `getLocationTownHall` | GetLocation | Find Town Hall coordinates | `locate_town_hall()` — template match against TH images |
+| `getLocationDarkElixirStorage` | GetLocation | Find DE storage | `locate_building("de_storage")` |
+| `getLocationDarkElixirStorageWithLevel` | GetLocation | Find DE storage with level | `locate_building("de_storage", with_level=True)` |
+| `getLocationElixirExtractorWithLevel` | GetLocation | Find elixir collectors with level | `locate_building("elixir_extractor", with_level=True)` |
+| `getLocationSnowElixirExtractorWithLevel` | GetLocation | Find snow-themed elixir collectors | `locate_building("snow_elixir_extractor", with_level=True)` |
+| `getLocationMineExtractorWithLevel` | GetLocation | Find gold mines with level | `locate_building("mine_extractor", with_level=True)` |
+| `getLocationSnowMineExtractorWithLevel` | GetLocation | Find snow-themed gold mines | `locate_building("snow_mine_extractor", with_level=True)` |
+| `ocr` | getOcr | OCR on bitmap region | `pytesseract.image_to_string()` or custom OCR |
+| `DoOCR` | getOcr | Alternative OCR entry point | Same as above |
+| `GetDeployableNextTo` | imglocAuxiliary | Calculate deployable points near a line | `geometry.get_deployable_points()` — pure Python geometry |
+| `GetOffSetRedline` | imglocAuxiliary | Offset redline by distance | `geometry.offset_polyline()` — pure Python geometry |
+| `setGlobalVar` | MBRFunc | Set debug flags in DLL | Direct Python state setting (no DLL needed) |
+| `setAndroidPID` | MBRFunc | Pass Android PID to DLL | Not needed — Python manages its own state |
+| `SetBotGuiPID` | MBRFunc | Pass GUI PID to DLL | Not needed |
+| `setVillageOffset` | MBRFunc | Set village coordinate offset | Direct Python state setting |
+| `ConvertVillagePos` | MBRFunc | Convert screen → village coords | Pure Python coordinate math |
+| `ConvertToVillagePos` | MBRFunc | Same | Pure Python |
+| `ConvertFromVillagePos` | MBRFunc | Village → screen coords | Pure Python |
+
+### 8.2 Template Matching Engine
+
+**Source files**: `Image Search/imglocAuxiliary.au3` (886 lines, 25 functions)
+
+| Function | Lines | Purpose | Python target |
+|----------|-------|---------|---------------|
+| `findMultiple()` | 80 | Multi-template search in directory | `mybot/vision/matcher.py: find_multiple()` |
+| `findImage()` / `findButton()` | 60 | Single image search | `mybot/vision/matcher.py: find_image()` |
+| `returnMultipleMatches()` | 50 | Return all match coordinates | `mybot/vision/matcher.py: find_all_matches()` |
+| `returnMultipleMatchesOwnVillage()` | 30 | Search within own village bounds | `mybot/vision/matcher.py: find_in_village()` |
+| `GetDeployableNextTo()` | 20 | Geometry calculation | `mybot/vision/geometry.py` |
+| `GetOffSetRedline()` | 20 | Redline offset | `mybot/vision/geometry.py` |
+| `decodeSingleCoord()` | 15 | Parse "x,y" from DLL result | Not needed — return tuples directly |
+| `decodeMultipleCoords()` | 30 | Parse "x1,y1|x2,y2" result | Not needed |
+| Remaining 17 utility funcs | ~580 | Various helpers | Distributed |
+
+**Core matching algorithm:**
+```python
+# mybot/vision/matcher.py
+def find_multiple(
+    screenshot: np.ndarray,
+    template_dir: Path,
+    search_area: tuple[int, int, int, int],  # x, y, w, h
+    max_results: int = 0,
+    min_level: int = 0,
+    max_level: int = 1000,
+    confidence: float = 0.85,
+    redlines: str = "",
+) -> list[MatchResult]:
+    """Replace DllCallMyBot("SearchMultipleTilesBetweenLevels", ...)"""
+    results = []
+    for template_path in template_dir.glob("*.xml"):
+        name, level, rotation = parse_template_name(template_path.stem)
+        if not (min_level <= level <= max_level):
+            continue
+        template_img = load_xml_template(template_path)
+        region = screenshot[y:y+h, x:x+w]
+        match_result = cv2.matchTemplate(region, template_img, cv2.TM_CCOEFF_NORMED)
+        locations = np.where(match_result >= confidence)
+        for pt in zip(*locations[::-1]):
+            results.append(MatchResult(name=name, x=pt[0]+x, y=pt[1]+y, level=level, confidence=match_result[pt[1], pt[0]]))
+    return results[:max_results] if max_results > 0 else results
+```
+
+### 8.3 XML Template Loader
+
+**No source file** — template loading is embedded in MBRBot.dll. Must reverse-engineer the format.
+
+**imgxml template format** (2,140+ files):
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<image>
+  <data>base64_encoded_png_data</data>
+</image>
+```
+
+**Template naming convention**: `ElementName_Scale_Rotation.xml`
+- Example: `Barb_100_91.xml` = Barbarian at 100% scale, 91° rotation
+
+**Target file**: `mybot/vision/templates.py`
+
+```python
+# mybot/vision/templates.py
+@dataclass
+class Template:
+    name: str
+    level: int
+    rotation: int
+    image: np.ndarray  # Decoded OpenCV image
+
+_template_cache: dict[Path, list[Template]] = {}
+
+def load_xml_template(path: Path) -> np.ndarray:
+    """Load base64-encoded image from XML template file."""
+    tree = ET.parse(path)
+    b64_data = tree.find(".//data").text
+    img_bytes = base64.b64decode(b64_data)
+    return cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+
+def load_template_dir(dir_path: Path) -> list[Template]:
+    """Load all templates from a directory, with caching."""
+    if dir_path in _template_cache:
+        return _template_cache[dir_path]
+    templates = []
+    for xml_file in dir_path.glob("*.xml"):
+        name_parts = xml_file.stem.rsplit("_", 2)
+        # Parse: ElementName_Level_Rotation
+        ...
+    _template_cache[dir_path] = templates
+    return templates
+```
+
+### 8.4 Pixel Operations
+
+**Source directory**: `COCBot/functions/Pixels/` (1,157 lines, 38 functions, 8 files)
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `_CaptureRegion.au3` | 432 | 18 | _(Phase 2 capture.py)_ | Already covered in Phase 2 |
+| `_PixelSearch.au3` | 205 | 2 | `mybot/vision/pixel.py` | `_PixelSearch()` — find pixel of specific color in region |
+| `_MultiPixelSearch.au3` | 134 | 5 | `mybot/vision/pixel.py` | `_MultiPixelSearch()` — find multiple color matches |
+| `_CheckPixel.au3` | 66 | 3 | `mybot/vision/pixel.py` | `_CheckPixel()` — verify pixel color at coordinates |
+| `_ColorCheck.au3` | 43 | 1 | `mybot/vision/pixel.py` | `_ColorCheck()` — compare two colors with tolerance |
+| `_GetPixelColor.au3` | 33 | 1 | `mybot/vision/pixel.py` | `_GetPixelColor()` — get hex color at coordinates |
+| `isInsideDiamond.au3` | 162 | 3 | `mybot/vision/geometry.py` | `isInsideDiamond()` — check if point is inside village diamond boundary |
+| `GetListPixel.au3` | 82 | 5 | `mybot/vision/pixel.py` | `GetListPixel()` — DLL call to get pixel lists from MBRBot.dll |
+
+**Python pixel operations on numpy arrays:**
+```python
+# mybot/vision/pixel.py
+def pixel_search(img: np.ndarray, color: tuple[int,int,int], tolerance: int = 15,
+                 region: tuple[int,int,int,int] = None) -> tuple[int,int] | None:
+    """Find first pixel matching color within tolerance."""
+    if region:
+        x, y, w, h = region
+        img = img[y:y+h, x:x+w]
+    target = np.array(color, dtype=np.uint8)
+    diff = np.abs(img.astype(int) - target.astype(int))
+    mask = np.all(diff <= tolerance, axis=2)
+    matches = np.argwhere(mask)
+    if len(matches) > 0:
+        return (matches[0][1] + (region[0] if region else 0),
+                matches[0][0] + (region[1] if region else 0))
+    return None
+```
+
+### 8.5 OCR / Text Recognition
+
+**Source directory**: `COCBot/functions/Read Text/` (912 lines, 79 functions, 4 files)
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `getOcr.au3` | 656 | 76 | `mybot/vision/ocr.py` | 76 specialized OCR functions: `getNameBuilding()`, `getGoldVillageSearch()`, `getElixirVillageSearch()`, `getRemainTrainTimer()`, `getTrophyMainScreen()`, `getHeroUpgradeTime()`, etc. |
+| `BuildingInfo.au3` | 70 | 1 | `mybot/vision/building_info.py` | `BuildingInfo()` — extract building name + level from info popup |
+| `getBuilderCount.au3` | 75 | 1 | `mybot/vision/ocr.py` | `getBuilderCount()` — read "X/Y" builder count |
+| `getShieldInfo.au3` | 111 | 1 | `mybot/vision/ocr.py` | `getShieldInfo()` — read shield/guard remaining time |
+
+**OCR strategy**: Each of the 76 `getOcr*()` functions reads text from a specific screen region with specific parameters. In Python, consolidate into a generic OCR function with region/language parameters:
+
+```python
+# mybot/vision/ocr.py
+def read_text(img: np.ndarray, region: tuple[int,int,int,int],
+              lang: str = "coc-latin", whitelist: str = "") -> str:
+    """Read text from screen region using pytesseract."""
+    x, y, w, h = region
+    crop = img[y:y+h, x:x+w]
+    # Preprocess: grayscale, threshold, invert
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    config = f"--psm 7"  # Single line
+    if whitelist:
+        config += f" -c tessedit_char_whitelist={whitelist}"
+    return pytesseract.image_to_string(binary, config=config).strip()
+
+# Specialized wrappers (replace 76 functions):
+def get_gold_village_search(img: np.ndarray) -> int:
+    return int(read_text(img, (x, y, w, h), whitelist="0123456789") or "0")
+```
+
+**Existing OCR templates**: The `lib/listSymbols_coc-*.xml` files (150+) are character templates for the custom OCR in MBRBot.dll. With pytesseract, these are not directly needed, but may be useful as training data if pytesseract accuracy is insufficient.
+
+### 8.6 Additional Image Search Files
+
+| Source file | Lines | Funcs | Target file | Notes |
+|-------------|-------|-------|-------------|-------|
+| `checkDeadBase.au3` | 343 | 8 | `mybot/vision/dead_base.py` | Dead base detection via collector fullness |
+| `CheckTombs.au3` | 304 | 4 | `mybot/vision/tombs.py` | Tombstone detection and removal |
+| `QuickMIS.au3` | 279 | 2 | `mybot/vision/quick_search.py` | Quick multi-image search — wrapper around `SearchMultipleTilesBetweenLevels` |
+| `imglocTHSearch.au3` | 277 | 3 | `mybot/vision/townhall.py` | Town Hall image search with level detection |
+| `IsWindowOpen.au3` | 163 | 4 | `mybot/vision/window_detect.py` | Detect if game windows/dialogs are open |
+| `imglocCheckWall.au3` | 155 | 2 | `mybot/vision/walls.py` | Wall level detection via image matching |
+
+### Phase 3 Deliverable
+
+A Python vision module that can:
+1. Load XML templates from imgxml/ directories
+2. Match templates against screenshots with configurable confidence
+3. Detect red deployment zone boundaries
+4. Read text/numbers from specific screen regions (OCR)
+5. Check pixel colors with tolerance
+6. Detect dead bases, buildings, walls, town halls
+
+### Phase 3 Validation Checklist
+
+- [ ] Load all 2,140+ XML templates without errors
+- [ ] Template matching accuracy ≥ 95% vs MBRBot.dll results on same screenshots
+- [ ] OCR reads resource amounts correctly (gold, elixir, DE, trophies)
+- [ ] OCR reads timer text correctly (upgrade times, training times)
+- [ ] Red area detection matches MBRBot.dll output on test screenshots
+- [ ] Dead base detection works on sample collector images
+- [ ] Pixel color checking works at all game screen positions
+- [ ] Performance: full template directory search < 2 seconds
