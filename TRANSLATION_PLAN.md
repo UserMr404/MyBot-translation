@@ -1431,3 +1431,456 @@ Python modules that can:
 - [ ] Hero ability activation fires at correct HP threshold
 - [ ] SmartFarm targets correct collector positions
 - [ ] Attack return home correctly reads loot gained
+
+---
+
+## 11. Phase 6: GUI & Application Shell
+
+**Priority**: MEDIUM — bot can run headless during Phases 1-5
+**Source lines**: ~35,000 (GUI/ 22,000 + top-level 10,800 + MBR GUI files)
+**Target files**: ~35 Python modules
+**Dependencies**: Phase 1-5 (all previous phases)
+
+### 11.1 Main Entry Point
+
+**Source files**: `MyBot.run.au3` (1,600 lines, 20 functions)
+
+| Function | Lines | Target | Purpose |
+|----------|-------|--------|---------|
+| `InitializeBot()` | ~400 | `mybot/app.py: App.__init__()` | Parse CLI args, init subsystems, create GUI |
+| `MainLoop()` | ~200 | `mybot/app.py: App.run()` | Event loop dispatching on `$g_iBotAction` |
+| `runBot()` | ~500 | `mybot/bot.py: Bot.run()` | Main bot cycle — the infinite loop |
+| `Initiate()` | ~100 | `mybot/bot.py: Bot.initiate()` | Check screen, zoom out, start main cycle |
+| `FirstCheck()` | ~80 | `mybot/bot.py: Bot.first_check()` | One-time initialization checks |
+| Plus 15 helper funcs | ~320 | Distributed | Various setup utilities |
+
+**Target file**: `mybot/app.py` — Application entry point
+
+```python
+# mybot/app.py
+class App:
+    def __init__(self, args: argparse.Namespace):
+        self.config = read_config(args.profile)
+        self.state = BotState()
+        self.bot = Bot(self.config, self.state)
+        if not args.nogui:
+            self.gui = MainWindow(self.config, self.state, self.bot)
+
+    def run(self) -> None:
+        if self.gui:
+            self.gui.show()
+        # Start bot in background thread
+        self.bot_thread = threading.Thread(target=self.bot.run, daemon=True)
+```
+
+### 11.2 Bot Controller
+
+**Source file**: `COCBot/MBR GUI Action.au3` (298 lines, 3 functions)
+
+| Function | Target | Purpose |
+|----------|--------|---------|
+| `BotStart()` | `mybot/bot.py: Bot.start()` | Open Android, init, start main loop |
+| `BotStop()` | `mybot/bot.py: Bot.stop()` | Cleanup, release resources |
+| `BotSearchMode()` | `mybot/bot.py: Bot.search_mode()` | Search-only mode (no attack) |
+
+### 11.3 GUI Design Files → PyQt6 Tabs
+
+**Source directory**: `COCBot/GUI/` — Design files (layout creation)
+
+| Source file | Lines | Controls | Target file | Tab/Section |
+|-------------|-------|----------|-------------|-------------|
+| `MBR GUI Design Bottom.au3` | 303 | ~50 | `mybot/gui/bottom_bar.py` | Status bar, Start/Stop/Pause buttons |
+| `MBR GUI Design Log.au3` | 93 | ~5 | `mybot/gui/log_widget.py` | Log display (QTextEdit with colors) |
+| `MBR GUI Design Splash.au3` | 113 | ~10 | `mybot/gui/splash.py` | Loading splash screen |
+| `MBR GUI Design Village.au3` | 47 | ~5 | `mybot/gui/tabs/village.py` | Village tab container |
+| `MBR GUI Design Bot.au3` | 66 | ~5 | `mybot/gui/tabs/bot.py` | Bot options tab container |
+| `MBR GUI Design Attack.au3` | 143 | ~10 | `mybot/gui/tabs/attack.py` | Attack tab container |
+| `MBR GUI Design About.au3` | 161 | ~15 | `mybot/gui/tabs/about.py` | About/info tab |
+| **Village child tabs:** | | | |
+| `Design Child Village - Donate.au3` | 3,966 | ~400 | `mybot/gui/tabs/village/donate.py` | Donation settings (LARGEST GUI file) |
+| `Design Child Village - Misc.au3` | 1,030 | ~100 | `mybot/gui/tabs/village/misc.py` | Miscellaneous village settings |
+| `Design Child Village - Upgrade.au3` | 975 | ~80 | `mybot/gui/tabs/village/upgrade.py` | Upgrade configuration |
+| `Design Child Village - Notify.au3` | 212 | ~25 | `mybot/gui/tabs/village/notify.py` | Notification settings |
+| `Design Child Village - Achievements.au3` | 105 | ~10 | `mybot/gui/tabs/village/achievements.py` | Achievement tracking |
+| **Bot child tabs:** | | | |
+| `Design Child Bot - Stats.au3` | 1,960 | ~150 | `mybot/gui/tabs/bot/stats.py` | Statistics display |
+| `Design Child Bot - Options.au3` | 261 | ~25 | `mybot/gui/tabs/bot/options.py` | Bot options |
+| `Design Child Bot - Debug.au3` | 201 | ~20 | `mybot/gui/tabs/bot/debug.py` | Debug settings |
+| `Design Child Bot - Profiles.au3` | 193 | ~15 | `mybot/gui/tabs/bot/profiles.py` | Profile management |
+| `Design Child Bot - Android.au3` | 188 | ~15 | `mybot/gui/tabs/bot/android.py` | Android emulator settings |
+| **Attack child tabs:** | | | |
+| `Design Child Attack - Troops.au3` | 1,760 | ~150 | `mybot/gui/tabs/attack/troops.py` | Troop selection & configuration |
+| `Design Child Attack - Deadbase-Search.au3` | 346 | ~30 | `mybot/gui/tabs/attack/deadbase_search.py` | Dead base search settings |
+| `Design Child Attack - Activebase-Search.au3` | 338 | ~30 | `mybot/gui/tabs/attack/activebase_search.py` | Active base search settings |
+| `Design Child Attack - Options-Attack.au3` | 465 | ~40 | `mybot/gui/tabs/attack/options_attack.py` | Attack options |
+| `Design Child Attack - Options-Search.au3` | 158 | ~15 | `mybot/gui/tabs/attack/options_search.py` | Search options |
+| Plus ~20 more attack design files | ~2,000 | ~200 | `mybot/gui/tabs/attack/*.py` | Various attack subtabs |
+
+### 11.4 GUI Control Files → PyQt6 Event Handlers
+
+| Source file | Lines | Funcs | Target file | Purpose |
+|-------------|-------|-------|-------------|---------|
+| `MBR GUI Control.au3` | 2,276 | 71 | `mybot/gui/main_window.py` | Main window event handlers |
+| `MBR GUI Control Variables.au3` | 352 | 1 | _(absorbed into widget refs)_ | GUI handle declarations |
+| `Control Bottom.au3` | 503 | 27 | `mybot/gui/bottom_bar.py` | `Initiate()`, `InitiateLayout()` |
+| `Control Child Army.au3` | 1,608 | 81 | `mybot/gui/handlers/army.py` | Army tab event handlers |
+| `Control Child Misc.au3` | 1,585 | 98 | `mybot/gui/handlers/misc.py` | Misc tab handlers |
+| `Control BOT Options.au3` | 1,226 | 68 | `mybot/gui/handlers/bot_options.py` | Bot options handlers |
+| `Control Child Upgrade.au3` | 980 | 40 | `mybot/gui/handlers/upgrade.py` | Upgrade tab handlers |
+| `Control Attack Scripted.au3` | 613 | 19 | `mybot/gui/handlers/attack_scripted.py` | Scripted attack handlers |
+| `Control Child Attack.au3` | 464 | 32 | `mybot/gui/handlers/attack.py` | Attack tab handlers |
+| `Control Tab Search.au3` | 402 | 38 | `mybot/gui/handlers/search.py` | Search settings handlers |
+| `Control Donate.au3` | 292 | 20 | `mybot/gui/handlers/donate.py` | Donation handlers |
+| `Control Android.au3` | 248 | 15 | `mybot/gui/handlers/android.py` | Android settings handlers |
+| `Control Preset.au3` | 247 | 8 | `mybot/gui/handlers/preset.py` | Preset/strategy handlers |
+| `Control Tab DropOrder.au3` | 233 | 9 | `mybot/gui/handlers/drop_order.py` | Drop order handlers |
+| `Control Tab Village.au3` | 169 | 10 | `mybot/gui/handlers/village.py` | Village tab handlers |
+| `Control Tab EndBattle.au3` | 145 | 10 | `mybot/gui/handlers/end_battle.py` | End battle handlers |
+| `Control Tab General.au3` | 141 | 4 | `mybot/gui/handlers/general.py` | General tab handlers |
+| `Control Notify.au3` | 114 | 6 | `mybot/gui/handlers/notify.py` | Notification handlers |
+| `Control Tab Stats.au3` | 104 | 6 | `mybot/gui/handlers/stats.py` | Statistics handlers |
+| `Control Splash.au3` | 70 | 4 | `mybot/gui/splash.py` | Splash screen handlers |
+| `Control Tab SmartZap.au3` | 85 | 8 | `mybot/gui/handlers/smart_zap.py` | SmartZap handlers |
+| `Control Achievements.au3` | 37 | 1 | `mybot/gui/handlers/achievements.py` | Achievement handlers |
+| `Control Collectors.au3` | 33 | 3 | `mybot/gui/handlers/collectors.py` | Collector handlers |
+| `Control Attack Standard.au3` | 43 | 2 | `mybot/gui/handlers/attack_standard.py` | Standard attack handlers |
+
+### 11.5 Other Application Components
+
+| Source file | Lines | Target file | Purpose |
+|-------------|-------|-------------|---------|
+| `MBR GUI Design.au3` | 681 | `mybot/gui/main_window.py` | Main window creation |
+| `MBR GUI Design Mini.au3` | 537 | `mybot/gui/mini_window.py` | Mini GUI for multi-instance |
+| `MyBot.run.MiniGui.au3` | 1,482 | `mybot/gui/mini_manager.py` | Multi-instance manager |
+| `MyBot.run.Watchdog.au3` | 196 | `mybot/watchdog.py` | Watchdog process |
+| `MyBot.run.Wmi.au3` | 136 | `mybot/system/wmi.py` | WMI process queries |
+| `MultiBot.au3` | 1,324 | `mybot/multi_bot.py` | Multi-instance launcher |
+| `MBR References.au3` | 530 | _(not needed)_ | AutoIt code stripping prevention |
+
+### 11.6 API Server
+
+**Source files**: `Other/Api.au3` (92 lines), `ApiClient.au3` (356 lines), `ApiHost.au3` (273 lines)
+
+| Source | Target | Purpose |
+|--------|--------|---------|
+| `Api.au3` | `mybot/api/server.py` | FastAPI server for external control |
+| `ApiClient.au3` | `mybot/api/client.py` | HTTP client for bot-to-bot communication |
+| `ApiHost.au3` | `mybot/api/server.py` | API endpoint handlers |
+
+### Phase 6 Deliverable
+
+Complete Python application:
+1. PyQt6 GUI matching AutoIt GUI layout and functionality
+2. All event handlers wired to bot logic
+3. Start/Stop/Pause controls
+4. Real-time log display with colors
+5. Statistics tracking and display
+6. Multi-instance support
+7. API server for external control
+8. Watchdog process for crash recovery
+
+### Phase 6 Validation Checklist
+
+- [ ] GUI launches and shows all tabs
+- [ ] All 3,775 controls have PyQt6 equivalents
+- [ ] Start/Stop/Pause buttons work correctly
+- [ ] Log widget displays colored messages in real-time
+- [ ] Config changes in GUI save to INI on close
+- [ ] Profile switching works in GUI
+- [ ] Multi-instance launcher works
+- [ ] API server responds to health/status endpoints
+- [ ] Bot runs complete cycle via GUI (start → collect → train → attack → stop)
+
+---
+
+## 12. Risk Assessment
+
+| Risk | Severity | Probability | Mitigation |
+|------|----------|-------------|------------|
+| **MBRBot.dll accuracy mismatch** | CRITICAL | HIGH | Prototype Phase 3 first. Capture test screenshots from AutoIt version, compare opencv-python results. Build accuracy benchmark. Accept ≥95% match rate |
+| **OCR accuracy for game fonts** | HIGH | MEDIUM | Test pytesseract on game screenshots early. If insufficient, train Tesseract on game font or build custom matcher using existing `listSymbols_coc-*.xml` templates |
+| **GUI complexity (3,775 controls)** | HIGH | MEDIUM | Start with headless/CLI mode. Build GUI incrementally. Consider auto-generating PyQt6 layout from AutoIt GUI definitions |
+| **CSV attack script Assign/Eval** | HIGH | LOW | Dict-based replacement is well-understood. Test all 20+ scripts after translation |
+| **Execute() dynamic dispatch** | HIGH | LOW | Strategy pattern replacement is straightforward. Test all 3 emulator types |
+| **Windows API dependencies (251 calls)** | MEDIUM | LOW | pywin32 provides all needed functions. Test on Windows 10/11 |
+| **ADB timing / race conditions** | MEDIUM | MEDIUM | Add proper retry logic, connection pooling, timeout handling |
+| **Config INI compatibility** | LOW | LOW | configparser reads same format. Round-trip test validates |
+| **Performance regression** | MEDIUM | MEDIUM | Python is slower than AutoIt+DLL for image matching. Mitigate with numpy vectorization, template caching, parallel matching |
+| **Multi-account state isolation** | MEDIUM | MEDIUM | Careful BotState design with per-account containers |
+
+---
+
+## 13. Execution Order & Parallelism
+
+```
+Phase 1: Foundation ──────► Phase 2: Android ──────► Phase 3: Vision
+   (2 weeks)                  (2 weeks)                (3 weeks)
+   Config, logging,           ADB, emulators,          OpenCV, OCR,
+   state, i18n                input, capture            templates
+                                                            │
+                              ┌─────────────────────────────┤
+                              ▼                             ▼
+                    Phase 4: Game Logic          Phase 5: Army & Attack
+                    (3 weeks)                    (3 weeks)
+                    Village, search,             Training, deployment,
+                    collection                   CSV scripts
+                              │         CAN RUN           │
+                              │        IN PARALLEL        │
+                              └──────────┬────────────────┘
+                                         ▼
+                              Phase 6: GUI & App Shell
+                              (4 weeks)
+                              PyQt6 GUI, API server,
+                              entry point, watchdog
+```
+
+**Phases 4 and 5 can run in parallel** once Phases 1-3 are complete.
+
+**Estimated total**: ~17 weeks for single developer, ~10 weeks with 2 developers working in parallel on Phase 4+5.
+
+---
+
+## 14. Python Project Structure (Final)
+
+```
+mybot-python/
+├── pyproject.toml
+├── README.md
+├── TRANSLATION_PLAN.md              ← This file
+├── mybot/
+│   ├── __init__.py
+│   ├── app.py                       ← Entry point (Phase 6)
+│   ├── bot.py                       ← Bot controller (Phase 6)
+│   ├── constants.py                 ← Game constants (Phase 1)
+│   ├── enums.py                     ← All enumerations (Phase 1)
+│   ├── state.py                     ← BotState dataclass hierarchy (Phase 1)
+│   ├── i18n.py                      ← Translation system (Phase 1)
+│   ├── watchdog.py                  ← Watchdog process (Phase 6)
+│   ├── multi_bot.py                 ← Multi-instance launcher (Phase 6)
+│   ├── notifications.py             ← Push notifications (Phase 6)
+│   │
+│   ├── config/                      ← Phase 1
+│   │   ├── __init__.py
+│   │   ├── models.py                ← Pydantic config models
+│   │   ├── reader.py                ← INI → config
+│   │   ├── writer.py                ← Config → INI
+│   │   ├── applier.py               ← Config → GUI
+│   │   ├── coordinates.py           ← Screen coordinates
+│   │   ├── delays.py                ← Delay constants
+│   │   ├── image_dirs.py            ← Image template paths
+│   │   ├── profiles.py              ← Profile management
+│   │   └── ini_table.py             ← INI batch operations
+│   │
+│   ├── android/                     ← Phase 2
+│   │   ├── __init__.py
+│   │   ├── adb.py                   ← ADB client
+│   │   ├── base.py                  ← Abstract emulator interface
+│   │   ├── bluestacks.py            ← BlueStacks5 implementation
+│   │   ├── memu.py                  ← MEmu implementation
+│   │   ├── nox.py                   ← Nox implementation
+│   │   ├── manager.py               ← Emulator lifecycle
+│   │   ├── embed.py                 ← Window embedding
+│   │   ├── input.py                 ← Click/drag/touch
+│   │   ├── capture.py               ← Screenshot capture
+│   │   ├── app.py                   ← Open/close CoC
+│   │   ├── health.py                ← Reboot/restart conditions
+│   │   ├── position.py              ← Window position
+│   │   ├── zoom.py                  ← Zoom control
+│   │   ├── distributors.py          ← Game distributor detection
+│   │   └── shortcuts.py             ← Menu shortcuts
+│   │
+│   ├── vision/                      ← Phase 3
+│   │   ├── __init__.py
+│   │   ├── matcher.py               ← OpenCV template matching
+│   │   ├── templates.py             ← XML template loader
+│   │   ├── pixel.py                 ← Pixel color operations
+│   │   ├── geometry.py              ← Diamond bounds, point-in-poly
+│   │   ├── ocr.py                   ← Text recognition
+│   │   ├── building_info.py         ← Building info reader
+│   │   ├── dead_base.py             ← Dead base detection
+│   │   ├── tombs.py                 ← Tombstone detection
+│   │   ├── townhall.py              ← TH detection
+│   │   ├── walls.py                 ← Wall level detection
+│   │   ├── window_detect.py         ← Game window detection
+│   │   └── quick_search.py          ← Quick multi-image search
+│   │
+│   ├── game/                        ← Phase 4
+│   │   ├── __init__.py
+│   │   ├── main_screen.py           ← Main screen checks
+│   │   └── obstacles.py             ← Popup detection/dismiss
+│   │
+│   ├── search/                      ← Phase 4
+│   │   ├── __init__.py
+│   │   ├── search.py                ← Village search loop
+│   │   ├── multi.py                 ← Multi-criteria search
+│   │   ├── resources.py             ← Loot reading & comparison
+│   │   ├── filters.py               ← Search mode filters
+│   │   ├── weak_base.py             ← Weak base detection
+│   │   ├── clouds.py                ← Cloud waiting
+│   │   ├── prepare.py               ← Pre-search setup
+│   │   └── townhall.py              ← TH detection in search
+│   │
+│   ├── village/                     ← Phase 4
+│   │   ├── __init__.py
+│   │   ├── collect.py               ← Resource collection
+│   │   ├── report.py                ← Village status report
+│   │   ├── donate.py                ← CC donations
+│   │   ├── request.py               ← CC requests
+│   │   ├── laboratory.py            ← Lab upgrades
+│   │   ├── upgrade_building.py      ← Building upgrades
+│   │   ├── upgrade_wall.py          ← Wall upgrades
+│   │   ├── upgrade_heroes.py        ← Hero upgrades
+│   │   ├── auto_upgrade.py          ← Auto upgrade
+│   │   ├── locate.py                ← Building location (7 buildings)
+│   │   ├── locate_upgrade.py        ← Upgrade location
+│   │   ├── switch_account.py        ← Multi-account switching
+│   │   ├── switch_base.py           ← Home/Builder Base switching
+│   │   ├── boost.py                 ← Barracks/heroes/structures
+│   │   ├── boost_super_troop.py     ← Super troop activation
+│   │   ├── helper_hut.py            ← Helper Hut management
+│   │   ├── pet_house.py             ← Pet House management
+│   │   ├── blacksmith.py            ← Blacksmith management
+│   │   ├── clan_capital.py          ← Clan Capital
+│   │   ├── clan_games.py            ← Clan Games
+│   │   ├── daily_challenges.py      ← Daily challenges
+│   │   ├── magic_items.py           ← Free magic items
+│   │   ├── resources.py             ← Resource full checks
+│   │   ├── treasury.py              ← Treasury collection
+│   │   ├── achievements.py          ← Achievement collection
+│   │   ├── shield.py                ← Shield status
+│   │   ├── drop_trophy.py           ← Trophy dropping
+│   │   ├── village_size.py          ← Village size detection
+│   │   ├── townhall.py              ← TH level detection
+│   │   ├── gain_cost.py             ← Gain/cost tracking
+│   │   ├── profile_report.py        ← Profile statistics
+│   │   ├── first_time.py            ← First-time detection
+│   │   ├── time_convert.py          ← OCR time conversion
+│   │   └── builder_base/            ← BB sub-module (10 files)
+│   │
+│   ├── army/                        ← Phase 5
+│   │   ├── __init__.py
+│   │   ├── train.py                 ← Training orchestrator
+│   │   ├── quick_train.py           ← Quick train mode
+│   │   ├── double_train.py          ← Double train mode
+│   │   ├── army_overview.py         ← Open army overview
+│   │   ├── train_siege.py           ← Siege training
+│   │   ├── train_it.py              ← Execute training clicks
+│   │   ├── train_click.py           ← Training button clicks
+│   │   ├── check_camp.py            ← Army camp check
+│   │   ├── check_full.py            ← Full army check
+│   │   ├── smart_wait.py            ← Smart wait for training
+│   │   ├── read_troops.py           ← Read troop composition
+│   │   ├── read_spells.py           ← Read spell composition
+│   │   ├── read_heroes.py           ← Read hero status
+│   │   ├── read_siege.py            ← Read siege machines
+│   │   └── read_cc.py               ← Read CC contents
+│   │
+│   ├── attack/                      ← Phase 5
+│   │   ├── __init__.py
+│   │   ├── cycle.py                 ← Attack cycle coordinator
+│   │   ├── prepare.py               ← Pre-attack setup
+│   │   ├── attack_bar.py            ← Read attack bar
+│   │   ├── deploy.py                ← Troop deployment
+│   │   ├── heroes.py                ← Hero deployment & health
+│   │   ├── launch.py                ← Troop launching
+│   │   ├── select.py                ← Troop selection
+│   │   ├── drop_order.py            ← Custom drop order
+│   │   ├── red_area.py              ← Red area detection
+│   │   ├── location.py              ← Building location (attack)
+│   │   ├── geometry.py              ← Attack geometry calculations
+│   │   ├── return_home.py           ← End battle
+│   │   ├── report.py                ← Attack report
+│   │   ├── stats.py                 ← Attack statistics
+│   │   ├── building_side.py         ← Building side detection
+│   │   ├── resource_change.py       ← Resource tracking
+│   │   ├── timing.py                ← Deployment timing
+│   │   ├── smart_zap.py             ← Smart zap
+│   │   ├── drill_search.py          ← DE drill search
+│   │   ├── easy_prey.py             ← Easy prey search
+│   │   ├── debug.py                 ← Attack debug visualization
+│   │   ├── algorithms/              ← Attack algorithms
+│   │   │   ├── all_troops.py
+│   │   │   ├── csv_attack.py
+│   │   │   └── smart_farm.py
+│   │   ├── csv/                     ← CSV attack engine
+│   │   │   ├── parser.py
+│   │   │   ├── executor.py
+│   │   │   ├── drop.py
+│   │   │   ├── drop_points.py
+│   │   │   ├── drop_line.py
+│   │   │   ├── sides.py
+│   │   │   ├── settings.py
+│   │   │   ├── validate.py
+│   │   │   ├── geometry.py
+│   │   │   ├── slice.py
+│   │   │   ├── debug.py
+│   │   │   └── clean.py
+│   │   ├── modes/                   ← Special attack modes
+│   │   │   ├── bb_spam.py
+│   │   │   ├── cc_spam.py
+│   │   │   ├── direct.py
+│   │   │   ├── ranked.py
+│   │   │   └── revenge.py
+│   │   └── builder_base/            ← BB attack
+│   │       ├── attack.py
+│   │       ├── prepare.py
+│   │       └── attack_bar.py
+│   │
+│   ├── gui/                         ← Phase 6
+│   │   ├── __init__.py
+│   │   ├── main_window.py           ← Main window (QMainWindow)
+│   │   ├── bottom_bar.py            ← Bottom control bar
+│   │   ├── log_widget.py            ← Log display widget
+│   │   ├── splash.py                ← Splash screen
+│   │   ├── mini_window.py           ← Mini GUI
+│   │   ├── mini_manager.py          ← Multi-instance manager
+│   │   ├── tabs/                    ← Tab implementations
+│   │   │   ├── village/             ← Village tab (5 subtabs)
+│   │   │   ├── bot/                 ← Bot tab (5 subtabs)
+│   │   │   ├── attack/              ← Attack tab (12+ subtabs)
+│   │   │   └── about.py
+│   │   └── handlers/                ← Event handlers (15 files)
+│   │
+│   ├── api/                         ← Phase 6
+│   │   ├── __init__.py
+│   │   ├── server.py                ← FastAPI server
+│   │   ├── client.py                ← HTTP client
+│   │   └── models.py                ← API models
+│   │
+│   ├── system/                      ← Phase 2/6
+│   │   ├── tray.py                  ← Tray icon management
+│   │   ├── dpi.py                   ← DPI detection
+│   │   └── wmi.py                   ← WMI queries
+│   │
+│   ├── utils/                       ← Phase 1
+│   │   ├── __init__.py
+│   │   ├── sleep.py                 ← Cancellable sleep
+│   │   ├── timer.py                 ← StopWatch, time formatting
+│   │   ├── formatting.py            ← Number formatting
+│   │   ├── version.py               ← Version checking
+│   │   ├── prerequisites.py         ← System prerequisite checks
+│   │   └── restart.py               ← Bot restart
+│   │
+│   └── log.py                       ← Phase 1
+│
+├── tests/                           ← All phases
+│   ├── conftest.py                  ← Shared fixtures
+│   ├── test_config/                 ← Phase 1 tests
+│   ├── test_android/                ← Phase 2 tests
+│   ├── test_vision/                 ← Phase 3 tests
+│   ├── test_village/                ← Phase 4 tests
+│   ├── test_army/                   ← Phase 5 tests
+│   ├── test_attack/                 ← Phase 5 tests
+│   ├── test_gui/                    ← Phase 6 tests
+│   └── fixtures/                    ← Test screenshots, configs
+│       ├── screenshots/             ← Reference game screenshots
+│       ├── configs/                 ← Test INI files
+│       └── templates/               ← Test XML templates
+│
+├── Languages/                       ← Reused from MyBot/ (unchanged)
+├── CSV/Attack/                      ← Reused from MyBot/ (unchanged)
+├── imgxml/                          ← Reused from MyBot/ (unchanged)
+└── images/                          ← Reused from MyBot/ (unchanged)
+```
+
+**Total Python files**: ~160 modules + ~40 test files = ~200 files
