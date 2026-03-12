@@ -613,3 +613,200 @@ A Python project that can:
 - [ ] `bot_sleep()` test: verify interruption within 50ms
 - [ ] `mypy --strict` passes on all Phase 1 modules
 - [ ] `ruff check` passes with zero warnings
+
+---
+
+## 7. Phase 2: Android / Emulator Layer
+
+**Priority**: CRITICAL — all game interaction goes through this layer
+**Source lines**: ~9,455 (Android/) + ~1,500 (Click/Screenshot from Other/)
+**Target files**: ~12 Python modules
+**Dependencies**: Phase 1 (config, logging, sleep)
+
+### 7.1 Core Emulator Management
+
+**Source file**: `COCBot/functions/Android/Android.au3` (5,046 lines, 123 functions)
+
+This is the **second largest file** in the codebase. It uses `Execute()` for dynamic dispatch to emulator-specific functions. Must be redesigned with Strategy pattern.
+
+**Key function groups in Android.au3:**
+
+| Function group | Count | Purpose | Python target |
+|---------------|-------|---------|---------------|
+| `Open*()`, `Close*()`, `Reboot*()` | 15 | Emulator lifecycle | `mybot/android/manager.py` |
+| `Android*Click()`, `AndroidFastClick()` | 8 | Touch input via ADB/minitouch | `mybot/android/input.py` |
+| `AndroidScreencap()` | 5 | Screenshot capture via ADB | `mybot/android/capture.py` |
+| `AndroidEmbed*()` | 12 | Window docking/embedding | `mybot/android/embed.py` |
+| `AndroidShield*()` | 10 | Shield overlay management | `mybot/android/shield.py` |
+| `AndroidAdb*()` | 20 | ADB shell communication | `mybot/android/adb.py` |
+| `AndroidZoomOut()` | 3 | Zoom control | `mybot/android/zoom.py` |
+| `WaitForAndroid*()` | 8 | Wait for emulator boot | `mybot/android/manager.py` |
+| `getAndroid*()` | 15 | Get emulator properties | `mybot/android/base.py` |
+| `Android*Config()` | 10 | Emulator config detection | `mybot/android/config.py` |
+| Remaining utility funcs | 17 | Misc helpers | Distributed |
+
+**Architecture redesign:**
+
+```python
+# mybot/android/base.py — Abstract emulator interface
+class BaseEmulator(ABC):
+    @abstractmethod
+    def open(self) -> bool: ...
+    @abstractmethod
+    def close(self) -> bool: ...
+    @abstractmethod
+    def reboot(self) -> bool: ...
+    @abstractmethod
+    def get_window_handle(self) -> int: ...
+    @abstractmethod
+    def get_adb_port(self) -> int: ...
+    @abstractmethod
+    def adjust_click_coordinates(self, x: int, y: int) -> tuple[int, int]: ...
+
+# mybot/android/bluestacks.py
+class BlueStacks5Emulator(BaseEmulator):
+    def open(self) -> bool: ...  # From OpenBlueStacks5()
+
+# mybot/android/memu.py
+class MEmuEmulator(BaseEmulator):
+    def open(self) -> bool: ...  # From OpenMEmu()
+
+# mybot/android/nox.py
+class NoxEmulator(BaseEmulator):
+    def open(self) -> bool: ...  # From OpenNox()
+```
+
+**Replaces 49 `Execute()` calls** that dynamically dispatch like:
+```autoit
+Execute("Open" & $g_sAndroidEmulator & "()")
+```
+
+### 7.2 Emulator-Specific Implementations
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `AndroidBluestacks5.au3` | 451 | 21 | `mybot/android/bluestacks.py` | `OpenBlueStacks5()`, `GetBlueStacks5Path()`, `BlueStacks5AdjustClickCoordinates()`, `InitBlueStacks5()` |
+| `AndroidMEmu.au3` | 436 | 13 | `mybot/android/memu.py` | `OpenMEmu()`, `GetMEmuPath()`, `MEmuAdjustClickCoordinates()`, `InitMEmu()` |
+| `AndroidNox.au3` | 489 | 18 | `mybot/android/nox.py` | `OpenNox()`, `GetNoxPath()`, `NoxAdjustClickCoordinates()`, `InitNox()` |
+
+### 7.3 Remaining Android/ Files
+
+| Source file | Lines | Funcs | Target file | Notes |
+|-------------|-------|-------|-------------|-------|
+| `AndroidEmbed.au3` | 1,180 | 26 | `mybot/android/embed.py` | Window docking into bot GUI. Heavy use of `WinMove()`, `WinGetPos()`. Uses pywin32 |
+| `ZoomOut.au3` | 571 | 10 | `mybot/android/zoom.py` | Zoom control via keyboard/mouse/ADB. Contains emulator-specific `ZoomOut*()` funcs — move into each emulator class |
+| `getBSPos.au3` | 384 | 3 | `mybot/android/position.py` | Get emulator window position/size. Uses `WinGetPos()`, `ControlGetPos()` |
+| `Close_OpenCoC.au3` | 233 | 5 | `mybot/android/app.py` | Open/close Clash of Clans app via ADB `am start`/`am force-stop` |
+| `UniversalCloseWaitOpenCoC.au3` | 173 | 2 | `mybot/android/app.py` | Generic close-wait-open with retries |
+| `Distributors.au3` | 121 | 6 | `mybot/android/distributors.py` | Google Play, Amazon, Kunlun distributor detection |
+| `checkAndroidTimeLag.au3` | 116 | 2 | `mybot/android/health.py` | Check if emulator clock is synced |
+| `checkAndroidPageError.au3` | 75 | 3 | `mybot/android/health.py` | Check for emulator error pages |
+| `CheckAndroidRebootCondition.au3` | 74 | 2 | `mybot/android/health.py` | Determine if reboot needed |
+| `CheckBotRestartCondition.au3` | 61 | 3 | `mybot/android/health.py` | Determine if bot restart needed |
+| `AndroidMenuShortcuts.au3` | 45 | 2 | `mybot/android/shortcuts.py` | Keyboard shortcuts for emulator |
+
+### 7.4 Input Simulation (from Other/)
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `Click.au3` | 617 | 20 | `mybot/android/input.py` | `Click()`, `PureClick()`, `GemClick()`, `BuildingClick()`, `ClickP()`, `isClickAway()`, `ClearScreen()` |
+| `ClickDrag.au3` | 130 | 3 | `mybot/android/input.py` | `ClickDrag()` — uses PostMessage via DllCall to user32.dll |
+| `ClickRemove.au3` | 44 | 1 | `mybot/android/input.py` | `ClickRemove()` — click to dismiss |
+| `ClickOkay.au3` | 39 | 1 | `mybot/android/input.py` | `ClickOkay()` — click OK buttons |
+| `ClickZoneR.au3` | 206 | 4 | `mybot/android/input.py` | `ClickZoneR()` — randomized click in zone |
+| `FindPos.au3` | 36 | 1 | `mybot/android/input.py` | `FindPos()` — find position by image |
+| `MoveMouseOutBS.au3` | 45 | 2 | `mybot/android/input.py` | Move mouse outside emulator window |
+
+**Input method hierarchy:**
+1. ADB touch events (default) — `adb shell input tap x y`
+2. Minitouch protocol (faster) — binary touch event protocol
+3. Windows PostMessage (fallback) — `PostMessage(WM_LBUTTONDOWN)`
+
+```python
+# mybot/android/input.py
+class InputMethod(ABC):
+    @abstractmethod
+    def click(self, x: int, y: int) -> None: ...
+    @abstractmethod
+    def drag(self, x1: int, y1: int, x2: int, y2: int, duration: int) -> None: ...
+
+class AdbInput(InputMethod): ...
+class MinitouchInput(InputMethod): ...
+class PostMessageInput(InputMethod): ...
+```
+
+### 7.5 Screen Capture (from Other/ and Pixels/)
+
+| Source file | Lines | Funcs | Target file | Notes |
+|-------------|-------|-------|-------------|-------|
+| `MakeScreenshot.au3` | 65 | 1 | `mybot/android/capture.py` | Save debug screenshots to file |
+| `SaveDebugImage.au3` | 373 | 5 | `mybot/android/capture.py` | Save annotated debug images |
+| `_CaptureRegion.au3` | 432 | 18 | `mybot/android/capture.py` | Core screenshot capture — ADB screencap, RGBA→BGRA conversion, region cropping |
+
+**ADB screencap pipeline (from `_CaptureRegion.au3`):**
+```autoit
+; Current AutoIt flow:
+1. $g_aiAndroidAdbScreencapBuffer = adb exec-out screencap (raw RGBA bytes)
+2. DllCall(helper_functions.dll, "RGBA2BGRA", ...) → convert to BGRA
+3. Store in GDI+ bitmap $g_hHBitmap2
+4. All image operations use $g_hHBitmap2
+```
+
+**Python replacement:**
+```python
+# mybot/android/capture.py
+def capture_screen(adb: AdbClient) -> np.ndarray:
+    """Capture emulator screen as BGR numpy array."""
+    raw = adb.exec_out("screencap -p")  # PNG format
+    img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+    return img  # BGR numpy array — ready for cv2.matchTemplate()
+
+def capture_region(adb: AdbClient, x: int, y: int, w: int, h: int) -> np.ndarray:
+    """Capture a region of the screen."""
+    full = capture_screen(adb)
+    return full[y:y+h, x:x+w]
+```
+
+### 7.6 ADB Communication
+
+**Source file**: `COCBot/functions/Other/ADB.au3` (43 lines, 1 function) + ADB calls scattered in `Android.au3` (~200 lines) and `LaunchConsole.au3` (409 lines, 16 functions)
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `ADB.au3` | 43 | 1 | `mybot/android/adb.py` | `ConnectAndroidAdb()` |
+| `LaunchConsole.au3` | 409 | 16 | `mybot/android/adb.py` | `LaunchConsole()`, `AndroidAdbSendShellCommand()`, `AndroidAdbLaunchShellInstance()`, etc. |
+
+**Python ADB client:**
+```python
+# mybot/android/adb.py
+class AdbClient:
+    def __init__(self, device_serial: str, adb_path: Path = None):
+        self._device = ...  # pure-python-adb device
+
+    def shell(self, command: str) -> str: ...
+    def exec_out(self, command: str) -> bytes: ...
+    def push(self, local: Path, remote: str) -> None: ...
+    def pull(self, remote: str, local: Path) -> None: ...
+    def tap(self, x: int, y: int) -> None: ...
+    def swipe(self, x1: int, y1: int, x2: int, y2: int, duration: int) -> None: ...
+```
+
+### Phase 2 Deliverable
+
+A Python module that can:
+1. Detect and connect to BlueStacks5 / MEmu / Nox emulators
+2. Capture screenshots as numpy arrays
+3. Send touch/click/drag commands via ADB
+4. Open/close/reboot the emulator
+5. Open/close the Clash of Clans app
+
+### Phase 2 Validation Checklist
+
+- [ ] Connect to running emulator and capture screenshot
+- [ ] Screenshot → numpy array → save as PNG matches expected game screen
+- [ ] Click at coordinates → verify emulator receives input
+- [ ] Drag operation works (for scrolling, zooming)
+- [ ] Open/close CoC app via ADB
+- [ ] Emulator auto-detection works for all 3 emulators
+- [ ] Zoom out function works
+- [ ] Window embedding/docking works (if GUI available)
