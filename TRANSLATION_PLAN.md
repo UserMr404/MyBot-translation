@@ -1,545 +1,405 @@
 # MyBot AutoIt → Python Translation Plan
 
-## Overview
+> **Living document** — Updated as translation progresses.
+> Generated from exhaustive static analysis of 577 .au3 files, 5,924 functions, ~219,000 lines of code.
+
+---
+
+## 1. Overview
 
 | Metric | Value |
 |--------|-------|
 | Source language | AutoIt 3 (.au3) |
 | Target language | Python 3.12+ |
-| Total source files | 577 .au3 files |
+| Source files | 577 .au3 files |
 | Total lines of code | ~219,000 |
-| Estimated effort | 6 phases |
+| Unique functions | 5,924 |
+| Global variables | 852 (in `MBR Global Variables.au3`) |
+| GUI controls | 3,775 (984 labels, 762 icons, 596 checkboxes, 243 inputs, 192 buttons, ...) |
+| GUI event handlers | 759 `GUISetOnEvent`/`GUICtrlSetOnEvent` calls |
+| DllCall invocations | 244 across 16 Windows DLLs |
+| MBRBot.dll API calls | 16 unique functions (image matching, OCR, red area detection) |
+| IniRead/IniWrite calls | 809 (configuration persistence) |
+| Image templates (imgxml/) | 2,140+ XML files across 227 subdirectories |
+| Translation strings | 16 language .ini files |
+| CSV attack scripts | 20+ pre-made scripts |
+| Estimated phases | 6 phases |
+| Translation difficulty | 8/10 (complex Windows desktop app with DLL interop) |
 
 ### Goals
-1. Translate MyBot from AutoIt 3 to idiomatic Python
-2. Preserve all existing functionality (emulator control, image recognition, attack logic, GUI)
-3. Improve maintainability with Python's ecosystem (type hints, testing, packaging)
-4. Maintain backward compatibility with existing config INI files, CSV attack scripts, and imgxml templates
+
+1. Translate MyBot from AutoIt 3 to **idiomatic Python** — not a line-by-line port
+2. Preserve all existing functionality
+3. Maintain backward compatibility with existing config INI files, CSV attack scripts, imgxml templates, and language .ini files
+4. Replace MBRBot.dll (proprietary .NET) with native `opencv-python` calls
+5. Improve maintainability: type hints, unit tests, proper packaging
 
 ### Non-Goals (initially)
-- Rewriting the image recognition engine (keep OpenCV, replace MBRBot.dll calls with opencv-python)
+
 - Changing the CSV attack script format
-- Redesigning the GUI (translate first, modernize later)
+- Changing the imgxml template format
+- Redesigning the GUI layout (translate first, modernize later)
+- Cross-platform support (stay Windows-only initially, abstract later)
 
 ---
 
-## Technology Stack (Proposed)
+## 2. Codebase Metrics by Directory
+
+### Lines of Code by Module
+
+| Directory | Files | Lines | Functions | Complexity |
+|-----------|-------|-------|-----------|------------|
+| `COCBot/functions/Village/` | 53+ | 25,434 | 200+ | HIGH — largest module, many interdependencies |
+| `COCBot/functions/Attack/` | 50+ | 13,561 | 150+ | HIGH — complex deployment algorithms |
+| `COCBot/functions/Other/` | 60 | 13,562 | 280+ | MEDIUM — utilities, mostly independent |
+| `COCBot/functions/Android/` | 15 | 9,455 | 239 | HIGH — platform-specific, DLL-heavy |
+| `COCBot/functions/CreateArmy/` | 30+ | 7,070 | 110+ | MEDIUM — training orchestration |
+| `COCBot/functions/Config/` | 8 | 6,594 | 153 | LOW — repetitive INI read/write |
+| `COCBot/functions/Search/` | 11 | 2,572 | 58 | MEDIUM — search pipeline |
+| `COCBot/functions/Image Search/` | 7 | 2,407 | 48 | CRITICAL — DLL replacement needed |
+| `COCBot/functions/Main Screen/` | 9 | 1,978 | 46 | LOW — state checks |
+| `COCBot/functions/Pixels/` | 8 | 1,157 | 38 | LOW — pixel utilities |
+| `COCBot/functions/Read Text/` | 4 | 912 | 79 | CRITICAL — OCR replacement needed |
+| `COCBot/functions/MOD/` | 6 | 644 | 6 | LOW — thin orchestration wrappers |
+| `COCBot/GUI/` | 63 | ~22,000 | 500+ | HIGH — tightly coupled to AutoIt GUI |
+| Top-level `.au3` files | 8 | ~10,800 | 250+ | HIGH — entry points, global state |
+| **TOTAL** | **~330 bot files** | **~118,000** | **~2,200** | — |
+
+> Note: Remaining ~100K lines are in `AutoIt/Include/` (standard library UDFs — not translated, replaced by Python stdlib).
+
+### Top 20 Largest Files (Translation Priority)
+
+| # | File | Lines | Funcs | Translation Notes |
+|---|------|-------|-------|-------------------|
+| 1 | `Android/Android.au3` | 5,046 | 123 | Emulator abstraction — redesign with Strategy pattern |
+| 2 | `GUI/Design Child Village - Donate.au3` | 3,966 | 4 | GUI layout — PyQt6 redesign |
+| 3 | `Village/Clan Games/ClanGames.au3` | 2,802 | 33 | Complex game logic with image detection |
+| 4 | `Config/applyConfig.au3` | 2,422 | 43 | Repetitive — can auto-generate Python |
+| 5 | `MBR Global Variables.au3` | 2,332 | 6 | Convert to enums + dataclasses |
+| 6 | `MBR GUI Control.au3` | 2,276 | 71 | Event handlers — framework-dependent |
+| 7 | `CreateArmy/getArmyHeroCount.au3` | 2,226 | 17 | Image-based hero detection |
+| 8 | `GUI/Design Child Bot - Stats.au3` | 1,960 | 6 | Statistics display layout |
+| 9 | `Village/DonateCC.au3` | 1,955 | 20 | Donation logic with image matching |
+| 10 | `Village/UpgradeHeroes.au3` | 1,863 | 11 | Hero upgrade automation |
+| 11 | `GUI/Design Child Attack - Troops.au3` | 1,760 | 12 | Troop selection layout |
+| 12 | `Village/ClanCapital.au3` | 1,720 | 26 | Clan Capital management |
+| 13 | `GUI/Control Child Army.au3` | 1,608 | 81 | Army tab event handlers |
+| 14 | `CreateArmy/TrainSystem.au3` | 1,607 | 39 | Training orchestrator |
+| 15 | `MyBot.run.au3` | 1,600 | 20 | Main entry point |
+| 16 | `GUI/Control Child Misc.au3` | 1,585 | 98 | Misc tab handlers |
+| 17 | `Village/HelperHut.au3` | 1,518 | 7 | Helper Hut automation |
+| 18 | `MyBot.run.MiniGui.au3` | 1,482 | 84 | Mini GUI manager |
+| 19 | `Config/readConfig.au3` | 1,468 | 44 | INI reading — auto-generate |
+| 20 | `Config/saveConfig.au3` | 1,413 | 50 | INI writing — auto-generate |
+
+---
+
+## 3. Dependency Graph (Load Order)
+
+The codebase has **zero circular dependencies** — a clean DAG:
+
+```
+MBR Global Variables.au3          ◄── MUST LOAD FIRST (852 globals)
+    │
+    ├── Config/DelayTimes.au3
+    ├── Config/ScreenCoordinates.au3
+    ├── Config/ImageDirectories.au3
+    │
+    ├── Other/MBRFunc.au3           ◄── DLL wrapper (MBRBot.dll)
+    ├── Android/Android.au3         ◄── Emulator abstraction
+    │
+    ├── MBR GUI Design.au3          ◄── GUI layout
+    ├── MBR GUI Control.au3         ◄── GUI event handlers
+    │
+    └── MBR Functions.au3           ◄── MASTER INCLUDE FILE
+        ├── Other/ (14 files)       ◄── Base utilities
+        ├── Pixels/ (8 files)       ◄── Low-level pixel ops
+        ├── Image Search/ (7 files) ◄── OpenCV matching
+        ├── Read Text/ (4 files)    ◄── OCR
+        ├── Android/ (15 files)     ◄── Emulator layer
+        ├── Main Screen/ (9 files)  ◄── Game state checks
+        ├── Village/ (53+ files)    ◄── Village management
+        ├── Search/ (11 files)      ◄── Enemy search
+        ├── Attack/ (50+ files)     ◄── Battle execution
+        ├── CreateArmy/ (30+ files) ◄── Army training
+        └── Config/ (8 files)       ◄── Settings persistence
+            │
+            └── MBR References.au3  ◄── MUST LOAD LAST
+```
+
+### Shared State — Critical Global Variables
+
+These globals are referenced across many modules and need careful state management in Python:
+
+| Variable | References | Written By | Read By | Python Approach |
+|----------|-----------|------------|---------|-----------------|
+| `$g_iMidOffsetY` | 1,313 | `getAndroidPos()` | Every pixel/click op | `BotState.screen.mid_offset_y` |
+| `$g_bRunState` | 619 | `BotStart/Stop()` | Every `_Sleep()` call | `BotState.running` (threading.Event) |
+| `$g_bDebugSetLog` | 464 | Config | `SetLog()`, many funcs | `logging.getLogger().level` |
+| `$g_avBuildingUpgrades` | 297 | Village module | Upgrade funcs | `BotState.village.building_upgrades` |
+| `$g_iBottomOffsetY` | 270 | `getAndroidPos()` | Pixel/click ops | `BotState.screen.bottom_offset_y` |
+| `$g_iMatchMode` | 270 | `VillageSearch()` | Attack funcs | `BotState.search.match_mode` |
+| `$g_aiCurrentLoot[]` | 226 | `GetResources()` | Search, Collect, Village | `BotState.village.current_loot` |
+| `$g_iTownHallLevel` | 175 | `GetTownHallLevel()` | Many funcs | `BotState.village.th_level` |
+| `$g_iCurAccount` | 167 | `SwitchAccount()` | Account-specific ops | `BotState.accounts.current` |
+| `$g_bFullArmy` | ~50 | `CheckFullArmy()` | `AttackCycle()`, Train | `BotState.army.is_full` |
+| `$g_bRestart` | 65 | Restart conditions | `_Sleep()` | `BotState.restart_requested` |
+
+**Python approach**: Replace 852 mutable globals with a `BotState` class hierarchy using dataclasses, with thread-safe access via `threading.Lock` where needed.
+
+---
+
+## 4. Technology Stack
 
 | Component | AutoIt (Current) | Python (Target) | Rationale |
 |-----------|-----------------|-----------------|-----------|
-| GUI | AutoIt native GUI | PyQt6 or Dear PyGui | PyQt6 for full-featured desktop GUI; Dear PyGui for lighter weight |
-| Image recognition | MBRBot.dll + OpenCV 2.2 DLLs | opencv-python (4.x) | Native Python bindings, actively maintained |
-| ADB communication | Shell calls to adb.exe | pure-python-adb or adb-shell | Eliminates subprocess overhead, better error handling |
-| OCR | Custom XML symbol matching | Tesseract (pytesseract) or EasyOCR | Battle-tested OCR libraries |
-| Config | INI files (AutoIt IniRead/Write) | configparser (stdlib) | Drop-in INI compatibility |
-| HTTP/API | libcurl.dll | requests / FastAPI | requests for client, FastAPI for bot API server |
-| JSON | Newtonsoft.Json.dll | json (stdlib) | Built-in |
-| Database | sqlite3.dll | sqlite3 (stdlib) | Built-in |
-| Logging | Custom SetLog() | logging (stdlib) | Standard Python logging with handlers |
-| Process mgmt | AutoIt Process functions | subprocess / psutil | Better process control |
-| Notifications | curl.exe calls | requests + apprise | Multi-platform notification library |
-| Crypto | AutoIt Crypt functions | cryptography | Industry standard |
-| Scheduling | Timer-based loops | asyncio or APScheduler | Modern async patterns |
+| **GUI** | AutoIt native GUI (3,775 controls) | **PyQt6** | Most capable desktop GUI framework; handles complex tabbed layouts, tree views, custom widgets |
+| **Image recognition** | MBRBot.dll + OpenCV 2.2 DLLs | **opencv-python 4.x** | Native Python bindings, actively maintained, replaces proprietary DLL |
+| **ADB communication** | Shell calls to `adb.exe` | **pure-python-adb** or **adb-shell** | Eliminates subprocess overhead, better error handling |
+| **OCR** | Custom XML symbol matching via MBRBot.dll | **pytesseract** + custom fallback | Battle-tested OCR; custom matcher for game-specific fonts if needed |
+| **Config (INI)** | `IniRead()`/`IniWrite()` (809 calls) | **configparser** (stdlib) | Drop-in INI compatibility, same file format |
+| **HTTP/API** | libcurl.dll / curl.exe | **requests** (client) + **FastAPI** (server) | Modern Python HTTP stack |
+| **JSON** | Custom `Json.au3` via jsmn C parser | **json** (stdlib) | Built-in, faster |
+| **Database** | sqlite3.dll | **sqlite3** (stdlib) | Built-in |
+| **Logging** | Custom `SetLog()` (370 lines) | **logging** (stdlib) | Standard Python logging with handlers, colors, file rotation |
+| **Process mgmt** | AutoIt Process functions + DllCall | **subprocess** + **psutil** | Better process control and monitoring |
+| **Notifications** | curl.exe → Telegram API | **requests** + **apprise** | Multi-platform notification library |
+| **Crypto** | AutoIt `_Crypt_*` functions | **cryptography** | Industry standard |
+| **Window mgmt** | AutoIt `Win*()` + DllCall user32 (251 calls) | **pywin32** (`win32gui`, `win32api`) | Direct Win32 API access |
+| **Timers** | `__TimerInit()`/`__TimerDiff()` + waitable timers | **time.perf_counter()** + **threading.Timer** | High-precision timing |
+| **Async/events** | `GUIOnEventMode` + `_Sleep()` polling | **threading** + `threading.Event` | Event-driven with cancellable waits |
 
 ---
 
-## Phase Breakdown
-
-### Phase 1: Foundation & Infrastructure (Priority: CRITICAL)
-**Lines: ~7,000 | Files to create: ~15**
-
-Set up the Python project structure and translate core infrastructure that everything else depends on.
-
-#### 1.1 Project Scaffolding
-- [ ] Create Python project structure with `pyproject.toml`
-- [ ] Set up virtual environment and dependency management (uv or poetry)
-- [ ] Configure linting (ruff), formatting (black), type checking (mypy)
-- [ ] Set up pytest framework
-- [ ] Create CI pipeline (GitHub Actions)
-
-#### 1.2 Global Variables → Python Module
-**Source**: `COCBot/MBR Global Variables.au3` (187 KB, ~5,800 lines)
-
-This is the single largest file. Translate to:
-- `mybot/constants.py` — Enums, game dimensions, color codes
-- `mybot/config/models.py` — Dataclasses/Pydantic models for config state
-- `mybot/state.py` — Runtime state (replaces mutable globals)
-
-Key translations:
-```
-AutoIt: Global $g_bRunState = False
-Python: class BotState:
-            run_state: bool = False
-```
-
-#### 1.3 Configuration System
-**Source**: `COCBot/functions/Config/` (6,594 lines, 8 files)
-
-- [ ] `mybot/config/reader.py` — Translate `readConfig.au3` (INI → dataclass)
-- [ ] `mybot/config/writer.py` — Translate `saveConfig.au3`
-- [ ] `mybot/config/applier.py` — Translate `applyConfig.au3`
-- [ ] `mybot/config/coordinates.py` — Translate `ScreenCoordinates.au3`
-- [ ] `mybot/config/image_dirs.py` — Translate `ImageDirectories.au3`
-- [ ] `mybot/config/delays.py` — Translate `DelayTimes.au3`
-- [ ] `mybot/config/profiles.py` — Translate `profileFunctions.au3`
-
-#### 1.4 Logging System
-**Source**: `COCBot/functions/Other/SetLog.au3`
-
-- [ ] `mybot/logging.py` — Python logging with colored output, file rotation
-- [ ] Preserve log color constants ($COLOR_ERROR, etc.)
-
-#### 1.5 Sleep / Control Flow
-**Source**: `COCBot/functions/Other/_Sleep.au3`
-
-- [ ] `mybot/utils/sleep.py` — Cancellable sleep that checks `BotState.run_state`
-- [ ] Consider `asyncio.sleep()` with cancellation support
-
-#### 1.6 Translation / i18n
-**Source**: `COCBot/functions/Other/Multilanguage.au3`
-
-- [ ] `mybot/i18n.py` — Read existing `.ini` language files
-- [ ] Maintain compatibility with current `Languages/*.ini` format
-- [ ] Cache translations in dict (same pattern as current static array)
-
-**Deliverable**: A Python project that can load config, log messages, and read translations.
-
----
-
-### Phase 2: Android / Emulator Layer (Priority: CRITICAL)
-**Lines: ~9,455 | Files to create: ~10**
-
-The emulator layer is the second dependency — everything interacts with the Android device.
-
-#### 2.1 ADB Communication
-**Source**: `COCBot/functions/Other/ADB.au3`
-
-- [ ] `mybot/android/adb.py` — ADB wrapper using pure-python-adb
-- [ ] Screen capture via `adb exec-out screencap`
-- [ ] Touch/swipe input via ADB or minitouch
-- [ ] Shell command execution
-- [ ] Device connection management
-
-#### 2.2 Emulator Abstraction
-**Source**: `COCBot/functions/Android/` (15 files)
-
-- [ ] `mybot/android/base.py` — Abstract emulator interface
-- [ ] `mybot/android/bluestacks.py` — BlueStacks 5 implementation
-- [ ] `mybot/android/memu.py` — MEmu implementation
-- [ ] `mybot/android/nox.py` — Nox implementation
-- [ ] `mybot/android/manager.py` — Emulator open/close/reboot/detect
-- [ ] `mybot/android/embed.py` — Window embedding (win32gui)
-
-#### 2.3 Input Simulation
-**Source**: `COCBot/functions/Other/Click.au3`, `ClickDrag.au3`
-
-- [ ] `mybot/android/input.py` — Click, drag, swipe via ADB
-- [ ] Coordinate translation for different resolutions
-- [ ] Random offset injection (human-like behavior)
-
-#### 2.4 Screen Capture
-**Source**: `COCBot/functions/Pixels/_CaptureRegion.au3`, `COCBot/functions/Other/MakeScreenshot.au3`
-
-- [ ] `mybot/android/capture.py` — Screenshot capture to numpy array
-- [ ] Region-based capture
-- [ ] Debug screenshot saving
-
-**Deliverable**: Python can connect to emulator, capture screens, send touches.
-
----
-
-### Phase 3: Image Recognition & Pixel Detection (Priority: CRITICAL)
-**Lines: ~3,560 | Files to create: ~8**
-
-Replace MBRBot.dll image matching with native opencv-python.
-
-#### 3.1 Template Matching
-**Source**: `COCBot/functions/Image Search/` (7 files)
-
-- [ ] `mybot/vision/template.py` — OpenCV template matching (replaces MBRBot.dll `findMultiple`)
-- [ ] Load base64-encoded XML templates → numpy arrays
-- [ ] Multi-scale matching with rotation support
-- [ ] Confidence threshold filtering
-- [ ] Return match coordinates compatible with existing code
-
-#### 3.2 Pixel Operations
-**Source**: `COCBot/functions/Pixels/` (8 files, 1,157 lines)
-
-- [ ] `mybot/vision/pixel.py` — Pixel color reading, search, comparison
-- [ ] `mybot/vision/region.py` — Region-based pixel scanning
-- [ ] `mybot/vision/geometry.py` — Diamond boundary checks, point-in-polygon
-
-#### 3.3 OCR
-**Source**: `COCBot/functions/Read Text/` (4 files, 912 lines)
-
-- [ ] `mybot/vision/ocr.py` — Text recognition (pytesseract or EasyOCR)
-- [ ] `mybot/vision/building_info.py` — Building info extraction
-- [ ] Number reading (resources, timers, costs)
-- [ ] Game font training data if needed
-
-#### 3.4 XML Template Loader
-- [ ] `mybot/vision/templates.py` — Parse `imgxml/**/*.xml` files
-- [ ] Decode base64 images to OpenCV format
-- [ ] Cache loaded templates in memory
-- [ ] Preserve directory structure mapping
-
-**Deliverable**: Python can detect game elements, read text, match templates from existing imgxml files.
-
----
-
-### Phase 4: Game Logic — Village & Search (Priority: HIGH)
-**Lines: ~28,000 | Files to create: ~40**
-
-Translate the core gameplay logic. This is the largest phase.
-
-#### 4.1 Main Screen Detection
-**Source**: `COCBot/functions/Main Screen/` (9 files, 1,978 lines)
-
-- [ ] `mybot/game/main_screen.py` — Check/wait for main screen
-- [ ] `mybot/game/obstacles.py` — Detect and dismiss popups
-- [ ] `mybot/game/builder_base.py` — Builder Base detection
-
-#### 4.2 Village Management
-**Source**: `COCBot/functions/Village/` (53 files, 25,434 lines)
-
-Break into submodules:
-- [ ] `mybot/village/collect.py` — Resource collection
-- [ ] `mybot/village/report.py` — Village status report
-- [ ] `mybot/village/donate.py` — CC donations
-- [ ] `mybot/village/request.py` — CC requests
-- [ ] `mybot/village/laboratory.py` — Lab upgrades
-- [ ] `mybot/village/upgrades.py` — Building/wall/hero upgrades
-- [ ] `mybot/village/auto_upgrade.py` — Automatic upgrade selection
-- [ ] `mybot/village/switch_account.py` — Multi-account switching
-- [ ] `mybot/village/boost.py` — Boosting (barracks, super troops, structures)
-- [ ] `mybot/village/free_items.py` — Trader/magic items
-- [ ] `mybot/village/clan_capital.py` — Clan Capital
-- [ ] `mybot/village/special_buildings.py` — Blacksmith, Pet House, Helper Hut
-- [ ] `mybot/village/builder_base/` — BB-specific operations
-- [ ] `mybot/village/clan_games.py` — Clan Games
-- [ ] `mybot/village/daily_challenges.py` — Daily challenges
-
-#### 4.3 Search System
-**Source**: `COCBot/functions/Search/` (11 files, 2,572 lines)
-
-- [ ] `mybot/search/village_search.py` — Main search loop
-- [ ] `mybot/search/townhall.py` — TH detection
-- [ ] `mybot/search/resources.py` — Loot reading and comparison
-- [ ] `mybot/search/filters.py` — Base filtering (weak base, dead base)
-- [ ] `mybot/search/clouds.py` — Cloud waiting
-
-**Deliverable**: Python can manage village, search for bases, collect resources.
-
----
-
-### Phase 5: Army & Attack Systems (Priority: HIGH)
-**Lines: ~21,000 | Files to create: ~30**
-
-#### 5.1 Army Training
-**Source**: `COCBot/functions/CreateArmy/` (30+ files, 7,070 lines)
-
-- [ ] `mybot/army/train.py` — Training orchestrator (TrainSystem)
-- [ ] `mybot/army/quick_train.py` — Quick train mode
-- [ ] `mybot/army/check.py` — Army readiness checks
-- [ ] `mybot/army/composition.py` — Troop/spell/siege reading
-- [ ] `mybot/army/cc.py` — CC troops/spells reading
-
-#### 5.2 Attack Execution
-**Source**: `COCBot/functions/Attack/` (50+ files, 13,561 lines)
-
-- [ ] `mybot/attack/cycle.py` — Attack cycle coordinator (from MOD/)
-- [ ] `mybot/attack/prepare.py` — Pre-attack setup
-- [ ] `mybot/attack/deploy.py` — Troop deployment
-- [ ] `mybot/attack/red_area.py` — Red area detection
-- [ ] `mybot/attack/troops.py` — Troop dropping, hero deployment
-- [ ] `mybot/attack/csv_parser.py` — CSV attack script parser
-- [ ] `mybot/attack/csv_executor.py` — CSV attack executor
-- [ ] `mybot/attack/algorithms/` — All troops, smart farm
-- [ ] `mybot/attack/smart_zap.py` — Dark elixir zapping
-- [ ] `mybot/attack/builder_base.py` — BB attacks
-- [ ] `mybot/attack/special.py` — Direct, ranked, revenge attacks
-
-**Deliverable**: Python can train armies and execute attacks including CSV scripts.
-
----
-
-### Phase 6: GUI & Application Shell (Priority: MEDIUM)
-**Lines: ~50,000+ | Files to create: ~30**
-
-#### 6.1 Main Application
-**Source**: `MyBot.run.au3`, `MBR GUI Action.au3`
-
-- [ ] `mybot/app.py` — Application entry point
-- [ ] `mybot/bot.py` — Bot controller (start/stop/search mode)
-- [ ] `mybot/watchdog.py` — Watchdog process
-
-#### 6.2 GUI Translation
-**Source**: `COCBot/GUI/` (63 files) + `MBR GUI Design.au3` + `MBR GUI Control.au3`
-
-This is the most labor-intensive part due to AutoIt's GUI being tightly coupled.
-
-- [ ] `mybot/gui/main_window.py` — Main window with tabs
-- [ ] `mybot/gui/tabs/village.py` — Village tab
-- [ ] `mybot/gui/tabs/attack.py` — Attack tab
-- [ ] `mybot/gui/tabs/bot.py` — Bot options tab
-- [ ] `mybot/gui/tabs/log.py` — Log display
-- [ ] `mybot/gui/tabs/about.py` — About tab
-- [ ] `mybot/gui/widgets/` — Reusable widgets
-- [ ] `mybot/gui/controls.py` — Event handlers
-- [ ] `mybot/gui/splash.py` — Splash screen
-- [ ] `mybot/gui/mini.py` — Mini GUI (from MiniGui.au3)
-
-#### 6.3 API Server
-**Source**: `COCBot/functions/Other/Api.au3`, `ApiClient.au3`, `ApiHost.au3`
-
-- [ ] `mybot/api/server.py` — FastAPI-based control API
-- [ ] `mybot/api/models.py` — Request/response models
-
-#### 6.4 Notifications
-**Source**: `COCBot/functions/Other/Notify.au3`
-
-- [ ] `mybot/notifications.py` — Push notification support via apprise
-
-**Deliverable**: Full working Python application with GUI.
-
----
-
-## Proposed Python Project Structure
-
-```
-mybot/
-├── pyproject.toml
-├── README.md
-├── mybot/
-│   ├── __init__.py
-│   ├── app.py                    # Entry point
-│   ├── bot.py                    # Bot controller
-│   ├── constants.py              # Enums, game constants
-│   ├── state.py                  # Runtime state
-│   ├── i18n.py                   # Translation system
-│   ├── watchdog.py               # Watchdog process
-│   ├── notifications.py          # Push notifications
-│   ├── config/
-│   │   ├── models.py             # Config dataclasses
-│   │   ├── reader.py             # INI reader
-│   │   ├── writer.py             # INI writer
-│   │   ├── applier.py            # Config → state
-│   │   ├── coordinates.py        # Screen coordinates
-│   │   ├── delays.py             # Delay constants
-│   │   ├── image_dirs.py         # Image template paths
-│   │   └── profiles.py           # Profile management
-│   ├── android/
-│   │   ├── adb.py                # ADB communication
-│   │   ├── base.py               # Emulator interface
-│   │   ├── bluestacks.py         # BlueStacks impl
-│   │   ├── memu.py               # MEmu impl
-│   │   ├── nox.py                # Nox impl
-│   │   ├── manager.py            # Emulator lifecycle
-│   │   ├── embed.py              # Window embedding
-│   │   ├── input.py              # Touch/click/drag
-│   │   └── capture.py            # Screen capture
-│   ├── vision/
-│   │   ├── template.py           # OpenCV template matching
-│   │   ├── pixel.py              # Pixel operations
-│   │   ├── region.py             # Region scanning
-│   │   ├── geometry.py           # Boundary checks
-│   │   ├── ocr.py                # Text recognition
-│   │   ├── building_info.py      # Building info reader
-│   │   └── templates.py          # XML template loader
-│   ├── game/
-│   │   ├── main_screen.py        # Main screen checks
-│   │   ├── obstacles.py          # Popup handling
-│   │   └── builder_base.py       # BB detection
-│   ├── village/
-│   │   ├── collect.py            # Resource collection
-│   │   ├── report.py             # Village report
-│   │   ├── donate.py             # CC donation
-│   │   ├── request.py            # CC request
-│   │   ├── laboratory.py         # Lab upgrades
-│   │   ├── upgrades.py           # Building upgrades
-│   │   ├── auto_upgrade.py       # Auto upgrade
-│   │   ├── switch_account.py     # Account switching
-│   │   ├── boost.py              # Boosting
-│   │   ├── free_items.py         # Magic items
-│   │   ├── clan_capital.py       # Clan Capital
-│   │   ├── clan_games.py         # Clan Games
-│   │   ├── daily_challenges.py   # Challenges
-│   │   └── builder_base/         # BB village ops
-│   ├── army/
-│   │   ├── train.py              # Training system
-│   │   ├── quick_train.py        # Quick train
-│   │   ├── check.py              # Army checks
-│   │   ├── composition.py        # Read army
-│   │   └── cc.py                 # CC troops
-│   ├── search/
-│   │   ├── village_search.py     # Search loop
-│   │   ├── townhall.py           # TH detection
-│   │   ├── resources.py          # Loot reading
-│   │   ├── filters.py            # Base filtering
-│   │   └── clouds.py             # Cloud handling
-│   ├── attack/
-│   │   ├── cycle.py              # Attack cycle
-│   │   ├── prepare.py            # Pre-attack
-│   │   ├── deploy.py             # Deployment
-│   │   ├── red_area.py           # Red area
-│   │   ├── troops.py             # Troop management
-│   │   ├── csv_parser.py         # CSV parser
-│   │   ├── csv_executor.py       # CSV executor
-│   │   ├── smart_zap.py          # Zap attacks
-│   │   ├── builder_base.py       # BB attack
-│   │   ├── special.py            # Special modes
-│   │   └── algorithms/           # Attack algorithms
-│   ├── gui/
-│   │   ├── main_window.py        # Main GUI window
-│   │   ├── controls.py           # Event handlers
-│   │   ├── splash.py             # Splash screen
-│   │   ├── mini.py               # Mini GUI
-│   │   ├── tabs/                 # Tab implementations
-│   │   └── widgets/              # Reusable widgets
-│   ├── api/
-│   │   ├── server.py             # FastAPI server
-│   │   └── models.py             # API models
-│   └── utils/
-│       ├── sleep.py              # Cancellable sleep
-│       ├── process.py            # Process management
-│       └── encoding.py           # Base64, JSON helpers
-├── tests/                        # pytest test suite
-├── Languages/                    # Existing .ini translations (reused)
-├── CSV/Attack/                   # Existing CSV scripts (reused)
-├── imgxml/                       # Existing templates (reused)
-└── images/                       # Existing UI graphics
+## 5. AutoIt → Python Translation Patterns
+
+### 5.1 Syntax Conversions
+
+| AutoIt | Python | Notes |
+|--------|--------|-------|
+| `Global $g_var = value` | `class BotState: var: type = value` | Replace globals with state objects |
+| `Local $var = value` | `var: type = value` | Local variables |
+| `Func Name($p1, $p2)` / `EndFunc` | `def name(p1: type, p2: type) -> type:` | Use snake_case, add type hints |
+| `If ... Then` / `ElseIf` / `EndIf` | `if ...:` / `elif ...:` | Standard mapping |
+| `For $i = 0 To $n` | `for i in range(n + 1):` | Note: AutoIt `To` is inclusive |
+| `For $i = 0 To $n Step 2` | `for i in range(0, n + 1, 2):` | Step parameter |
+| `While ... WEnd` | `while ...:` | Direct mapping |
+| `Switch $var` / `Case` / `EndSwitch` | `match var:` / `case ...:` | Python 3.10+ match |
+| `Select` / `Case` / `EndSelect` | `if/elif/else` chain | No direct equivalent |
+| `Dim $arr[n]` | `arr: list = [None] * n` | Or use typed list |
+| `Local $arr[3] = [1, 2, 3]` | `arr = [1, 2, 3]` | Direct |
+| `$arr[$i][$j]` | `arr[i][j]` | Same indexing |
+| `ReDim $arr[n]` | `arr.extend([None] * (n - len(arr)))` | Or use list append |
+| `#include "file.au3"` | `from module import ...` | Python imports |
+| `#include-once` | _(automatic in Python)_ | Modules imported once by default |
+| `True` / `False` | `True` / `False` | Same |
+| `Default` | `None` | Default parameter values |
+| `@error` | Raise exception or return error | See error handling section |
+| `@ScriptDir` | `Path(__file__).parent` | Use `pathlib` |
+| `@CRLF` | `"\r\n"` or `os.linesep` | Line endings |
+| `@TAB` | `"\t"` | Tab character |
+
+### 5.2 String Operations
+
+| AutoIt | Python | Notes |
+|--------|--------|-------|
+| `StringInStr($s, $find)` | `$find in s` or `s.find(find)` | `in` for boolean, `.find()` for position |
+| `StringLeft($s, $n)` | `s[:n]` | Slicing |
+| `StringRight($s, $n)` | `s[-n:]` | Slicing |
+| `StringMid($s, $start, $len)` | `s[start-1:start-1+length]` | AutoIt is 1-indexed! |
+| `StringLen($s)` | `len(s)` | Direct |
+| `StringSplit($s, $delim)` | `s.split(delim)` | AutoIt returns [count, parts...]; Python returns [parts] |
+| `StringReplace($s, $old, $new)` | `s.replace(old, new)` | Direct |
+| `StringUpper($s)` / `StringLower($s)` | `s.upper()` / `s.lower()` | Direct |
+| `StringStripWS($s, 3)` | `s.strip()` | Flag 3 = both sides |
+| `StringFormat("%02d", $v)` | `f"{v:02d}"` | f-strings preferred |
+| `StringRegExp($s, $pattern, 1)` | `re.findall(pattern, s)` | Flag 1 = return array of matches |
+| `StringRegExp($s, $pattern, 0)` | `bool(re.search(pattern, s))` | Flag 0 = boolean match |
+| `StringRegExpReplace($s, $p, $r)` | `re.sub(p, r, s)` | Direct |
+| `StringToBinary($s, 4)` | `s.encode('utf-8')` | Flag 4 = UTF-8 |
+| `BinaryToString($b, 4)` | `b.decode('utf-8')` | Flag 4 = UTF-8 |
+
+### 5.3 Array Operations
+
+| AutoIt | Python | Notes |
+|--------|--------|-------|
+| `_ArrayShuffle($arr)` | `random.shuffle(arr)` | In-place |
+| `_ArraySearch($arr, $val)` | `arr.index(val)` | Raises ValueError if not found |
+| `_ArrayAdd($arr, $val)` | `arr.append(val)` | Direct |
+| `_ArrayDelete($arr, $idx)` | `del arr[idx]` or `arr.pop(idx)` | Direct |
+| `_ArraySort($arr)` | `arr.sort()` | In-place |
+| `UBound($arr)` | `len(arr)` | Direct |
+| `UBound($arr, 2)` | `len(arr[0])` (if 2D) | Column count |
+| `_ArrayDisplay($arr)` | `print(arr)` or logging | Debug only |
+
+### 5.4 File I/O
+
+| AutoIt | Python | Notes |
+|--------|--------|-------|
+| `IniRead($file, $sect, $key, $def)` | `config.get(sect, key, fallback=def)` | `configparser` |
+| `IniWrite($file, $sect, $key, $val)` | `config.set(sect, key, val)` | Then `config.write()` |
+| `IniReadSection($file, $sect)` | `dict(config[sect])` | Returns dict |
+| `FileOpen($path, $mode)` | `open(path, mode)` | Use context manager |
+| `FileRead($handle)` | `f.read()` | Direct |
+| `FileReadLine($handle)` | `f.readline()` or `next(f)` | Direct |
+| `FileWrite($handle, $data)` | `f.write(data)` | Direct |
+| `FileExists($path)` | `Path(path).exists()` | Use `pathlib` |
+| `DirCreate($path)` | `Path(path).mkdir(parents=True, exist_ok=True)` | Use `pathlib` |
+| `FileCopy($src, $dst)` | `shutil.copy2(src, dst)` | Preserves metadata |
+| `FileDelete($path)` | `Path(path).unlink(missing_ok=True)` | Use `pathlib` |
+
+### 5.5 Error Handling (CRITICAL — 1,118 occurrences)
+
+AutoIt uses `@error` macro and `SetError()`. Python uses exceptions.
+
+**AutoIt pattern:**
+```autoit
+$result = SomeFunction()
+If @error Then
+    SetLog("Error: " & @error, $COLOR_ERROR)
+    Return False
+EndIf
 ```
 
----
-
-## AutoIt → Python Translation Patterns
-
-### Common Conversions
-
-| AutoIt | Python |
-|--------|--------|
-| `Global $g_var = value` | `class State: var: type = value` |
-| `Local $var = value` | `var: type = value` |
-| `Func name()` / `EndFunc` | `def name():` |
-| `If ... Then` / `EndIf` | `if ...:` |
-| `For $i = 0 To $n` | `for i in range(n + 1):` |
-| `While ... WEnd` | `while ...:` |
-| `Switch ... EndSwitch` | `match ... case` (3.10+) |
-| `Dim $arr[n]` | `arr: list = [None] * n` |
-| `IniRead()` | `configparser.get()` |
-| `StringInStr()` | `str.find()` or `in` |
-| `StringSplit()` | `str.split()` |
-| `MsgBox()` | `QMessageBox` (PyQt6) |
-| `GUICtrlCreateButton()` | `QPushButton()` (PyQt6) |
-| `DllCall()` | `ctypes` or native Python lib |
-| `_ArrayShuffle()` | `random.shuffle()` |
-| `Execute()` | `eval()` (avoid) or dispatch dict |
-| `#include "file.au3"` | `from module import ...` |
-| `$array[$enum]` | `dataclass.field` or `dict[enum]` |
-
-### Patterns to Modernize
-
-| AutoIt Pattern | Python Improvement |
-|---------------|-------------------|
-| Global mutable state | Dependency injection, state objects |
-| Flag-based restart checking | `asyncio` cancellation or threading events |
-| Numeric enums (`$eTroopBarbarian = 0`) | `enum.IntEnum` or `enum.Enum` |
-| INI section/key string matching | Typed config models with validation |
-| Manual error checking | Exception handling with context managers |
-| Sleep-based polling | `asyncio.Event.wait()` or threading conditions |
-| String-based function dispatch | First-class functions, strategy pattern |
-
----
-
-## Risk Assessment
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| MBRBot.dll replacement | HIGH — core image matching | Prototype opencv-python matching first, validate accuracy against AutoIt version |
-| GUI complexity | HIGH — 63 GUI files, tightly coupled | Start with CLI/headless mode, add GUI incrementally |
-| OCR accuracy | MEDIUM — custom symbol matching | Test pytesseract/EasyOCR against game screenshots before committing |
-| ADB timing | MEDIUM — race conditions | Add proper async/await, connection retry logic |
-| Windows-specific APIs | MEDIUM — win32gui, WMI | Use pywin32, keep Windows-only for now, abstract for future cross-platform |
-| Config compatibility | LOW — INI format unchanged | configparser reads same format, add migration tests |
-| CSV compatibility | LOW — format unchanged | Parse identically, add unit tests for each CSV script |
-
----
-
-## Migration Strategy
-
-### Approach: **Strangler Fig** (incremental replacement)
-
-Rather than a full rewrite, build Python modules alongside AutoIt and gradually shift:
-
-1. **Phase 1-3** can be developed and tested independently (no GUI needed)
-2. Start with a **headless/CLI mode** that runs the bot without GUI
-3. Add GUI in Phase 6 after core logic is verified
-4. Each phase produces a testable, runnable subset
-5. Validate each phase against the AutoIt version by comparing behavior on same game state
-
-### Testing Strategy
-- **Unit tests** for each translated module (config parsing, coordinate math, template loading)
-- **Integration tests** with emulator screenshots (captured reference images)
-- **Comparison tests** — run both AutoIt and Python versions, compare outputs
-- **CSV attack tests** — verify CSV parser produces identical drop sequences
-
----
-
-## Dependencies (pyproject.toml)
-
-```toml
-[project]
-name = "mybot"
-version = "0.1.0"
-requires-python = ">=3.12"
-
-dependencies = [
-    "opencv-python>=4.9",
-    "numpy>=1.26",
-    "Pillow>=10.0",
-    "PyQt6>=6.6",
-    "pure-python-adb>=0.3",
-    "pytesseract>=0.3",
-    "requests>=2.31",
-    "fastapi>=0.109",
-    "uvicorn>=0.27",
-    "apprise>=1.7",
-    "psutil>=5.9",
-    "pywin32>=306",
-    "cryptography>=42.0",
-    "pydantic>=2.6",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.2",
-    "mypy>=1.8",
-    "black>=24.1",
-    "pre-commit>=3.6",
-]
+**Python translation:**
+```python
+try:
+    result = some_function()
+except BotError as e:
+    logger.error(f"Error: {e}")
+    return False
 ```
 
----
+**Key rules:**
+- `@error` after DllCall → catch `ctypes` exceptions or check return codes
+- `SetError(n, 0, False)` → raise custom `BotError(code=n)` or return `Result` type
+- `@extended` → use exception attributes or named tuple returns
+- Functions returning `False`/`-1` on error → raise exceptions instead (more Pythonic)
 
-## Phase Execution Order & Priority
+### 5.6 Dynamic Execution (CRITICAL — 77 occurrences, HIGH RISK)
 
+AutoIt uses `Execute()`, `Eval()`, `Assign()` for dynamic dispatch. **Never use `eval()` in Python.**
+
+**Pattern 1: Emulator dispatch via Execute() (Android.au3)**
+```autoit
+Execute("Open" & $g_sAndroidEmulator & "()")  ; Calls OpenBlueStacks5() or OpenMEmu() etc.
 ```
-Phase 1: Foundation ──────► Phase 2: Android ──────► Phase 3: Vision
-   (config, logging,          (ADB, emulators,        (OpenCV, OCR,
-    state, i18n)               input, capture)          templates)
-                                                            │
-                              ┌─────────────────────────────┤
-                              ▼                             ▼
-                    Phase 4: Game Logic          Phase 5: Army & Attack
-                    (village, search,            (training, deployment,
-                     collection)                  CSV scripts)
-                              │                             │
-                              └──────────┬──────────────────┘
-                                         ▼
-                              Phase 6: GUI & App Shell
-                              (PyQt6 GUI, API server,
-                               entry point, watchdog)
+**Python replacement — Strategy pattern:**
+```python
+class EmulatorManager:
+    _emulators: dict[str, BaseEmulator] = {
+        "BlueStacks5": BlueStacks5Emulator,
+        "MEmu": MEmuEmulator,
+        "Nox": NoxEmulator,
+    }
+    def open(self) -> None:
+        self._emulators[self.emulator_name]().open()
 ```
 
-Phases 4 and 5 can be developed **in parallel** once Phases 1-3 are complete.
+**Pattern 2: CSV attack vectors via Assign/Eval (ParseAttackCSV.au3)**
+```autoit
+Assign("ATTACKVECTOR_" & $value1, $tmpArray)
+Local $pixel = Execute("$ATTACKVECTOR_" & $value1 & "[" & $i & "]")
+```
+**Python replacement — Dictionary:**
+```python
+attack_vectors: dict[str, list] = {}
+attack_vectors[value1] = tmp_array
+pixel = attack_vectors[value1][i]
+```
+
+**Pattern 3: Enum lookup via Eval (various)**
+```autoit
+$g_iTree = Int(Eval("e" & $sTreeName))
+```
+**Python replacement — Enum by name:**
+```python
+tree_value = TroopEnum[tree_name].value
+```
+
+### 5.7 DllCall Replacement Map (244 calls across 16 DLLs)
+
+| DLL | Function | Python Replacement |
+|-----|----------|--------------------|
+| **MBRBot.dll** (16 unique funcs) | | |
+| | `SearchMultipleTilesBetweenLevels` | `cv2.matchTemplate()` with multi-scale loop |
+| | `FindTile` | `cv2.matchTemplate()` single template |
+| | `SearchRedLines` | Custom contour detection with `cv2.findContours()` |
+| | `GetProperty` | Return match metadata from Python matching |
+| | `getRedArea` | `cv2.inRange()` + contour detection |
+| | `getRedAreaSideBuilding` | Combined color + template matching |
+| | `getLocation*` (6 variants) | `cv2.matchTemplate()` with template dirs |
+| | `ocr` / `DoOCR` | `pytesseract.image_to_string()` or custom matcher |
+| | `setGlobalVar`, `setAndroidPID`, etc. | Direct Python state setting |
+| | `GetDeployableNextTo` | Geometry calculation in Python |
+| | `GetOffSetRedline` | Geometry offset calculation |
+| **user32.dll** | `PostMessage`, `SendMessage` | `win32gui.PostMessage()`, `win32gui.SendMessage()` |
+| | `FindWindow`, `FindWindowEx` | `win32gui.FindWindow()` |
+| | `GetDC`, `ReleaseDC` | `win32gui.GetDC()`, `win32gui.ReleaseDC()` |
+| | `PrintWindow` | `win32gui.PrintWindow()` |
+| **kernel32.dll** | `OpenProcess`, `CloseHandle` | `ctypes.windll.kernel32` or `psutil` |
+| | `ReadProcessMemory`, `WriteProcessMemory` | `ctypes` or `pymem` |
+| | `GlobalAlloc`, `GlobalLock` | `ctypes` for clipboard ops |
+| | `VirtualAlloc`, `VirtualFree` | Not needed — Python manages memory |
+| **gdi32.dll** | `GetPixel`, `CreateDC` | `PIL.Image.getpixel()` or numpy array indexing |
+| | `GetDeviceCaps` | `win32print.GetDeviceCaps()` |
+| **ntdll.dll** | `ZwDelayExecution` | `time.sleep()` (microsecond precision not needed) |
+| | `ZwYieldExecution` | `time.sleep(0)` — thread yield |
+| **shell32.dll** | `Shell_NotifyIconW` | `pystray` or `win32gui` tray icon |
+| **wininet.dll** | `InternetGetConnectedState` | `requests.get()` with timeout, or `socket.create_connection()` |
+| **PowrProf.dll** | `SetSuspendState` | `ctypes.windll.PowrProf.SetSuspendState()` |
+| **dwmapi.dll** | `DwmIsCompositionEnabled` | `ctypes.windll.dwmapi` |
+
+### 5.8 GUI Control Translation (3,775 controls → PyQt6)
+
+| AutoIt Control | Count | PyQt6 Widget |
+|---------------|-------|-------------|
+| `GUICtrlCreateLabel` | 984 | `QLabel` |
+| `GUICtrlCreateIcon` | 762 | `QLabel` with `QPixmap` |
+| `GUICtrlCreateCheckbox` | 596 | `QCheckBox` |
+| `GUICtrlCreateGroup` | 529 | `QGroupBox` |
+| `GUICtrlCreateInput` | 243 | `QLineEdit` |
+| `GUICtrlCreateButton` | 192 | `QPushButton` |
+| `GUICtrlCreateEdit` | 156 | `QTextEdit` |
+| `GUICtrlCreateCombo` | 124 | `QComboBox` |
+| `GUICtrlCreateTabItem` | 76 | `QTabWidget.addTab()` |
+| `GUICtrlCreateRadio` | 32 | `QRadioButton` |
+| `GUICtrlCreateTreeViewItem` | 22 | `QTreeWidgetItem` |
+| `GUICtrlCreatePic` | 20 | `QLabel` with `QPixmap` |
+| `GUICtrlCreateTab` | 17 | `QTabWidget` |
+| `GUICtrlCreateSlider` | 7 | `QSlider` |
+| `GUICtrlCreateDummy` | 5 | _(no widget, use signal/slot)_ |
+| `GUICtrlCreateProgress` | 3 | `QProgressBar` |
+| `GUICtrlCreateTreeView` | 1 | `QTreeWidget` |
+| `GUICtrlCreateListView` | 1 | `QTableWidget` |
+| `GUICtrlCreateMenu` | 1 | `QMenuBar` |
+| `GUICtrlCreateGraphic` | 1 | `QGraphicsView` or `QPainter` |
+
+**Event handling translation:**
+```autoit
+; AutoIt
+GUISetOnEvent($GUI_EVENT_CLOSE, "OnClose")
+GUICtrlSetOnEvent($btnStart, "BtnStartClick")
+```
+```python
+# PyQt6
+self.closeEvent = self.on_close
+self.btn_start.clicked.connect(self.btn_start_click)
+```
+
+### 5.9 Win32 Window Management (251 calls → pywin32)
+
+| AutoIt Function | Count | Python (pywin32) |
+|----------------|-------|-----------------|
+| `WinMove()` | 93 | `win32gui.MoveWindow()` |
+| `ProcessExists()` | 42 | `psutil.pid_exists()` |
+| `WinGetPos()` | 35 | `win32gui.GetWindowRect()` |
+| `ControlClick()` | 27 | `win32gui.PostMessage(WM_LBUTTONDOWN/UP)` |
+| `WinGetHandle()` | 20 | `win32gui.FindWindow()` |
+| `ControlSend()` | 14 | `win32gui.PostMessage(WM_CHAR)` |
+| `WinSetState()` | 8 | `win32gui.ShowWindow()` |
+| `WinGetTitle()` | 8 | `win32gui.GetWindowText()` |
+| `WinActivate()` | 4 | `win32gui.SetForegroundWindow()` |
+| `WinClose()` | 3 | `win32gui.PostMessage(WM_CLOSE)` |
+| `ProcessClose()` | 3 | `psutil.Process(pid).terminate()` |
+| `WinKill()` | 2 | `psutil.Process(pid).kill()` |
