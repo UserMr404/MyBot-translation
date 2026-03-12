@@ -1,0 +1,100 @@
+NOTE  |Author: Phael
+NOTE  |Updated: 01/02/2026
+NOTE  |
+NOTE  |[ 6 ] Healer + [ 6 ] Yeti
+NOTE  |[ 4 ] RootR + [ 4 ] Witch
+NOTE  |[ 1 ] AppWard
+NOTE  |[ 5 ] Rage
+NOTE  |[ 1 ] Totem
+NOTE  |
+NOTE  |Attack Drop: External Edges
+NOTE  |Clan Castle: Any Troops + Quake
+NOTE  |Siege Machine: Log Launcher
+      |                                                                                                                                                                       |
+      |---------------------------------------------------------------------------AngryRoots Start----------------------------------------------------------------------------|
+      |                                                                                                                                                                       |
+      |___________|____TH06___|____TH07___|____TH08___|____TH09___|____TH10___|____TH11___|____TH12___|____TH13___|____TH14___|____TH15___|____TH16___|____TH17___|____TH18___|
+REDLN |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |
+DRPLN |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |
+      |                                                                                                                                                                       |
+      |___________|____TH06___|____TH07___|____TH08___|____TH09___|____TH10___|____TH11___|____TH12___|____TH13___|____TH14___|____TH15___|____TH16___|____TH17___|____TH18___|
+CCREQ |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |
+      |                                                                                                                                                                       |
+      |EXTR. GOLD |EXTR.ELIXIR|EXTR. DARK |DEPO. GOLD |DEPO.ELIXIR|DEPO. DARK |TOWNHALL   |FORCED SIDE|___________|___________|___________|___________|___________|___________|
+SIDE  |0          |0          |0          |0          |0          |0          |5          |           |           |           |           |           |           |           |
+      |EAGLE      |INFERNO    |XBOW       |WIZTOWER   |MORTAR     |AIRDEFENSE |MONOLITH   |GEMBOX     |           |           |           |           |           |           |
+SIDEB |0          |0          |0          |0          |0          |0          |0          |           |           |           |           |           |           |           |
+      |                                                                                                                                                                       |
+      |VECTOR_____|SIDE_______|DROP_POINTS|ADDTILES___|VERSUS_____|RANDOMX_PX_|RANDOMY_PX_|BUILDING___|___________|___________|___________|___________|___________|___________|
+      |TROOP WAVE
+MAKE  |A          |FRONT-LEFT |10         |1          |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |B          |FRONT-RIGHT|10         |1          |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+   
+      |RAGE
+MAKE  |C          |FRONT-LEFT |10         |-9         |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |D          |FRONT-LEFT |10         |-16        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+   
+      |QUAKE
+MAKE  |R          |FRONT-LEFT |10         |-28        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |T          |FRONT-RIGHT|10         |-28        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+  
+      |CORNER DROP
+MAKE  |Z          |FRONT-RIGHT|10         |1          |EXT-INT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |Y          |FRONT-RIGHT|10         |-16        |EXT-INT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |X          |FRONT-RIGHT|10         |-21        |EXT-INT    |0          |0          |           |           |           |           |           |           |           |
+      |                                                                                                                                                                       |
+      |                                                                                                                       |           |           |           |           |
+      |VECTOR_____|INDEX______|QTY_X_VECT_|TROOPNAME__|DELAY_DROP_|DELAYCHANGE|SLEEPAFTER_|___________|___________|___________|___________|___________|___________|___________|
+      |TROOP WAVE
+DROP  |A          |5,3,1      |6          |Yeti       |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |5,3        |4          |RootR      |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |Queen      |128        |0          |16-32      |           |           |           |           |           |           |           |
+   
+      |SIEGES
+DROP  |A          |4          |1          |BBlimp     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |BDrill     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |FlamF      |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |LogL       |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |SiegeB     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |StoneS     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |TroopL     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |WWreck     |128        |0          |16-32      |           |           |           |           |           |           |           |
+
+      |SUPPORT
+DROP  |A          |4          |6          |Heal       |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |Warden     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |AppWard    |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |5,3        |4          |Witc       |128        |0          |16-32      |           |           |           |           |           |           |           |
+    
+      |RAGE
+DROP  |C          |1          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |C          |6          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+
+      |EVENT
+DROP  |A          |5,4,3,2,1  |10         |FireC      |128        |0          |16-32      |           |           |           |           |           |           |           |
+
+      |HEROES
+DROP  |A          |4          |1          |King       |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |4          |1          |Prince     |128        |0          |16-32      |           |           |           |           |           |           |           |
+WAIT  |5000       |           |           |           |           |           |           |           |           |           |           |           |           |           |
+
+      |RAGE
+DROP  |D          |1          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |D          |5          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+   
+      |CORNER DROP
+DROP  |Z          |5          |1          |Champion   |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |Y          |10         |1          |RSpell     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |X          |10         |1          |TSpell     |128        |0          |16-32      |           |           |           |           |           |           |           |
+     
+      |QUAKE
+DROP  |R          |2          |1          |ESpell     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |R          |4          |1          |ESpell     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |T          |2          |1          |ESpell     |128        |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |T          |4          |1          |ESpell     |128        |0          |16-32      |           |           |           |           |           |           |           |
+    
+      |REMAINING TROOPS/SKILLS
+WAIT  |10000-15000|           |           |           |           |           |           |           |           |           |           |           |           |           |
+DROP  |Z          |5          |10         |REMAIN     |128        |0          |16-32      |           |           |           |           |           |           |           |
+      |                                                                                                                                                                       |
+      |----------------------------------------------------------------------------AngryRoots End-----------------------------------------------------------------------------| 

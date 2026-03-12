@@ -1,0 +1,103 @@
+NOTE  |Author: Phael
+NOTE  |Updated: 01/02/2026
+NOTE  |
+NOTE  |[ 8 ] EDrag + [16] Loons + [ 1 ] AppWard
+NOTE  |[ 6 ] SDrag + [16] Loons + [ 1 ] AppWard
+NOTE  |[ 4 ] Rage
+NOTE  |[ 3 ] Totem
+NOTE  |
+NOTE  |Attack Drop: External Edges
+NOTE  |Clan Castle: Any Troops + Quake
+NOTE  |Siege Machine: Log Launcher
+      |                                                                                                                                                                       |
+      |----------------------------------------------------------------------------DragLoon Start-----------------------------------------------------------------------------|
+      |                                                                                                                                                                       |
+      |___________|____TH06___|____TH07___|____TH08___|____TH09___|____TH10___|____TH11___|____TH12___|____TH13___|____TH14___|____TH15___|____TH16___|____TH17___|____TH18___|
+REDLN |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |4          |
+DRPLN |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |0          |
+      |                                                                                                                                                                       |
+      |___________|____TH06___|____TH07___|____TH08___|____TH09___|____TH10___|____TH11___|____TH12___|____TH13___|____TH14___|____TH15___|____TH16___|____TH17___|____TH18___|
+CCREQ |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |XP         |
+      |                                                                                                                                                                       |
+      |EXTR. GOLD |EXTR.ELIXIR|EXTR. DARK |DEPO. GOLD |DEPO.ELIXIR|DEPO. DARK |TOWNHALL   |FORCED SIDE|___________|___________|___________|___________|___________|___________|
+SIDE  |0          |0          |0          |0          |0          |0          |10         |           |           |           |           |           |           |           |
+      |EAGLE      |INFERNO    |XBOW       |WIZTOWER   |MORTAR     |AIRDEFENSE |MONOLITH   |GEMBOX     |           |           |           |           |           |           |
+SIDEB |0          |0          |0          |0          |0          |0          |0          |           |           |           |           |           |           |           |
+      |                                                                                                                                                                       |
+      |VECTOR_____|SIDE_______|DROP_POINTS|ADDTILES___|VERSUS_____|RANDOMX_PX_|RANDOMY_PX_|BUILDING___|___________|___________|___________|___________|___________|___________|
+      |TROOP WAVE
+MAKE  |A          |FRONT-LEFT |10         |2          |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |B          |FRONT-RIGHT|10         |2          |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+
+      |RAGE
+MAKE  |C          |FRONT-LEFT |10         |-8         |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |D          |FRONT-RIGHT|10         |-8         |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |E          |FRONT-LEFT |10         |-16        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |F          |FRONT-RIGHT|10         |-16        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+
+      |QUAKE
+MAKE  |R          |FRONT-LEFT |10         |-28        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |T          |FRONT-RIGHT|10         |-28        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+
+      |TOTEM
+MAKE  |X          |FRONT-LEFT |10         |-19        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |Y          |FRONT-RIGHT|10         |-21        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+MAKE  |Z          |FRONT-RIGHT|10         |-23        |INT-EXT    |0          |0          |           |           |           |           |           |           |           |
+      |                                                                                                                                                                       |
+      |                                                                                                                       |           |           |           |           |
+      |VECTOR_____|INDEX______|QTY_X_VECT_|TROOPNAME__|DELAY_DROP_|DELAYCHANGE|SLEEPAFTER_|___________|___________|___________|___________|___________|___________|___________|
+      |1ST TROOP WAVE
+DROP  |A-B        |6,4,3,1    |4          |EDrag      |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A-B        |1,3,4,6    |4          |SDrag      |128        |0          |128-256    |           |           |           |           |           |           |           |
+
+      |SUPPORT
+DROP  |A          |1          |1          |Warden     |16         |0          |16-32      |           |           |           |           |           |           |           |
+
+      |RAGE
+DROP  |C          |1          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |C          |5          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |D          |4          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+  
+      |2ND TROOP WAVE
+DROP  |A-B        |6,5,4,3    |4          |Ball       |64         |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A-B        |1,2,3,4    |4          |Ball       |64         |0          |16-32      |           |           |           |           |           |           |           |
+
+      |SIEGES
+DROP  |A          |1          |1          |BBlimp     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |BDrill     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |FlamF      |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |LogL       |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |SiegeB     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |StoneS     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |TroopL     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |WWreck     |128        |0          |128-256    |           |           |           |           |           |           |           |
+
+      |HEROES
+DROP  |A-B        |1          |1          |IceG       |16         |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |Queen      |16         |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |King       |16         |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |1          |1          |AppWard    |16         |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |B          |6          |1          |Champion   |16         |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |B          |6          |1          |Duke       |16         |0          |16-32      |           |           |           |           |           |           |           |
+DROP  |A          |6          |1          |Prince     |16         |0          |16-32      |           |           |           |           |           |           |           |
+
+      |TOTEM
+DROP  |X          |4          |1          |TSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |Y          |1          |1          |TSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |Z          |4          |1          |TSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+  
+      |MID RAGE
+DROP  |E          |3          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |F          |2          |1          |RSpell     |256        |0          |128-256    |           |           |           |           |           |           |           |
+
+      |QUAKE
+DROP  |R          |2          |1          |ESpell     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |T          |2          |1          |ESpell     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |R          |3          |1          |ESpell     |128        |0          |128-256    |           |           |           |           |           |           |           |
+DROP  |T          |3          |1          |ESpell     |128        |0          |128-256    |           |           |           |           |           |           |           |
+   
+      |REMAINING TROOPS/SKILLS
+WAIT  |10000-15000|           |           |           |           |           |           |           |           |           |           |           |           |           |
+DROP  |A-B        |1-5        |10         |REMAIN     |128        |0          |16-32      |           |           |           |           |           |           |           |
+      |                                                                                                                                                                       |
+      |-----------------------------------------------------------------------------DragLoon End------------------------------------------------------------------------------| 
