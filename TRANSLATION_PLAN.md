@@ -403,3 +403,213 @@ self.btn_start.clicked.connect(self.btn_start_click)
 | `WinClose()` | 3 | `win32gui.PostMessage(WM_CLOSE)` |
 | `ProcessClose()` | 3 | `psutil.Process(pid).terminate()` |
 | `WinKill()` | 2 | `psutil.Process(pid).kill()` |
+
+---
+
+## 6. Phase 1: Foundation & Infrastructure
+
+**Priority**: CRITICAL — everything depends on this
+**Source lines**: ~12,000 | **Target files**: ~20 Python modules
+**Dependencies**: None (starting point)
+
+### 6.1 Project Scaffolding
+
+Create the Python project skeleton:
+
+```
+mybot/
+├── pyproject.toml
+├── README.md
+├── mybot/
+│   ├── __init__.py
+│   └── ...
+├── tests/
+│   ├── __init__.py
+│   └── ...
+├── Languages/          ← symlink or copy from MyBot/Languages/
+├── CSV/                ← symlink or copy from MyBot/CSV/
+├── imgxml/             ← symlink or copy from MyBot/imgxml/
+└── images/             ← symlink or copy from MyBot/images/
+```
+
+**Tasks:**
+- [ ] Create `pyproject.toml` with all dependencies (see Section 4)
+- [ ] Configure ruff (linting), black (formatting), mypy (type checking)
+- [ ] Set up pytest with fixtures for test screenshots
+- [ ] Create GitHub Actions CI: lint → type-check → test
+- [ ] Create `.env.example` for user-configurable paths
+
+### 6.2 Global Variables → Python State Model
+
+**Source file**: `COCBot/MBR Global Variables.au3` (2,332 lines, 6 functions, 852 globals)
+
+This is the most important translation decision. All 852 globals become structured state:
+
+**Target files:**
+
+| Python file | What it contains | Source lines |
+|-------------|-----------------|--------------|
+| `mybot/constants.py` | Game dimensions, color codes, delay constants, enum values | ~800 |
+| `mybot/enums.py` | All enum types (troops, spells, heroes, buildings, loot types) | ~500 |
+| `mybot/state.py` | `BotState` dataclass hierarchy (runtime mutable state) | ~600 |
+| `mybot/config/models.py` | `BotConfig` pydantic models (user settings from INI) | ~400 |
+
+**Translation rules for each global variable:**
+
+| Global pattern | Python target | Example |
+|---------------|--------------|---------|
+| `$eTroop*`, `$eSpell*`, `$eHero*` | `enum.IntEnum` in `enums.py` | `class Troop(IntEnum): BARBARIAN = 0` |
+| `$g_iGAME_WIDTH`, `$COLOR_*` | Constants in `constants.py` | `GAME_WIDTH = 860` |
+| `$DELAY*` | Constants in `config/delays.py` | `DELAY_GETTHLEVEL1 = 500` |
+| `$g_bRunState`, `$g_bRestart` | `BotState` with `threading.Event` | `state.running.is_set()` |
+| `$g_aiCurrentLoot[]` | `BotState.village.loot: LootState` | `state.village.loot.gold` |
+| `$g_sProfileCurrentName` | `BotConfig.profile.name` | `config.profile.name` |
+| `$g_hAndroidWindow` | `BotState.android.window_handle` | `state.android.hwnd` |
+| `$g_abChkDonate*[]` | `BotConfig.donate.*` | `config.donate.troop_enabled[Troop.BARBARIAN]` |
+| `$g_iTownHallLevel` | `BotState.village.th_level` | `state.village.th_level` |
+| `$g_h*` (GUI handles) | PyQt6 widget references | `self.btn_start` (not in state) |
+
+**Critical gotcha**: AutoIt globals are freely read/written from any function. In Python, pass `BotState` as dependency injection parameter, not as module-level global.
+
+### 6.3 Configuration System
+
+**Source directory**: `COCBot/functions/Config/` (6,594 lines, 8 files)
+
+| Source file | Lines | Funcs | Target file | Notes |
+|-------------|-------|-------|-------------|-------|
+| `readConfig.au3` | 1,468 | 44 | `mybot/config/reader.py` | 44 functions like `ReadConfig_600_1()` — each reads a section of INI. Consolidate into single `read_config()` with section handlers |
+| `saveConfig.au3` | 1,413 | 50 | `mybot/config/writer.py` | Mirror of readConfig. 50 functions like `SaveConfig_600_1()`. Consolidate similarly |
+| `applyConfig.au3` | 2,422 | 43 | `mybot/config/applier.py` | Applies loaded config to GUI controls. 43 functions like `ApplyConfig_600_1()`. In PyQt6, bind config model to widgets directly |
+| `ScreenCoordinates.au3` | 397 | 0 | `mybot/config/coordinates.py` | Pure constants — game screen pixel positions. Direct translation |
+| `ImageDirectories.au3` | 266 | 0 | `mybot/config/image_dirs.py` | Paths to imgxml template directories. Use `pathlib.Path` |
+| `DelayTimes.au3` | 186 | 0 | `mybot/config/delays.py` | Delay constants in milliseconds. Direct translation |
+| `profileFunctions.au3` | 287 | 9 | `mybot/config/profiles.py` | Profile creation, switching, listing. 9 funcs: `frmBotAddProfile`, `frmBotDeleteProfile`, `profileSwitch`, etc. |
+| `_Ini_Table.au3` | 155 | 7 | `mybot/config/ini_table.py` | INI batch operations. 7 funcs for table-based read/write |
+
+**Translation approach for readConfig/saveConfig:**
+These files are extremely repetitive (each line reads one INI key into one global variable). Generate Python code that maps INI sections/keys to config model fields:
+
+```python
+# Instead of 1,468 lines of IniRead, use declarative mapping:
+CONFIG_MAP = {
+    ("General", "SearchMode"): ("search.enabled", bool, False),
+    ("General", "TownHallLevel"): ("village.th_level", int, 0),
+    # ... ~700 mappings
+}
+
+def read_config(path: Path) -> BotConfig:
+    parser = configparser.ConfigParser()
+    parser.read(path)
+    config = BotConfig()
+    for (section, key), (attr, type_, default) in CONFIG_MAP.items():
+        set_nested_attr(config, attr, type_(parser.get(section, key, fallback=default)))
+    return config
+```
+
+### 6.4 Logging System
+
+**Source file**: `COCBot/functions/Other/SetLog.au3` (370 lines, 18 functions)
+
+| Function | Purpose | Python equivalent |
+|----------|---------|-------------------|
+| `SetLog($msg, $color)` | Main log function | `logger.info(msg)` with color handler |
+| `SetDebugLog($msg)` | Debug-only log | `logger.debug(msg)` |
+| `_SetLog($msg, $color)` | Internal log impl | Custom `logging.Handler` |
+| `_GUICtrlRichEdit_AppendTextColor()` | GUI log with color | PyQt6 `QTextEdit.appendHtml()` |
+| `FlushGuiLog()` | Flush log buffer | Handler `flush()` |
+| Plus 13 more utility functions | Various | Logging module features |
+
+**Target files:**
+- `mybot/log.py` — Custom logging handler that writes to file + GUI log widget
+- Color constants from `$COLOR_ERROR`, `$COLOR_WARNING`, etc. → logging levels
+
+### 6.5 Sleep / Control Flow
+
+**Source file**: `COCBot/functions/Other/_Sleep.au3` (147 lines, 3 functions)
+
+| Function | Lines | Purpose | Python replacement |
+|----------|-------|---------|-------------------|
+| `_Sleep($ms)` | 80 | Sleep that checks `$g_bRunState` and `$g_bRestart` every iteration | `bot_sleep()` using `threading.Event.wait(timeout)` |
+| `_SleepMilli($ms)` | 30 | Microsecond-precision sleep via `ZwDelayExecution` | `time.sleep(ms / 1000)` |
+| `_SleepStatus($ms)` | 37 | Sleep with status bar update | `bot_sleep()` with callback |
+
+**Target file**: `mybot/utils/sleep.py`
+
+**Critical**: `_Sleep()` is called **1,801 times** across the codebase. It's the primary mechanism for cooperative multitasking — every operation checks if the bot should stop/restart. Python translation:
+
+```python
+def bot_sleep(ms: int, state: BotState) -> bool:
+    """Sleep for ms milliseconds. Returns True if interrupted (restart/stop requested)."""
+    if state.stop_event.wait(timeout=ms / 1000):
+        return True  # Interrupted
+    return False
+```
+
+### 6.6 Translation / i18n
+
+**Source file**: `COCBot/functions/Other/Multilanguage.au3` (1,202 lines, 5 functions)
+
+| Function | Lines | Purpose | Python replacement |
+|----------|-------|---------|-------------------|
+| `GetTranslatedFileIni($section, $key, $default, ...)` | 600+ | Main translation lookup with caching and fallback | `i18n.t(section, key, default, *args)` |
+| `DetectLanguage()` | 200+ | Detect system language | `locale.getdefaultlocale()` |
+| `InitLanguage()` | 150+ | Load language file | Load `.ini` file at startup |
+| `SetLanguage()` | 100+ | Switch language | Reload `.ini` and refresh |
+| `TestLanguageComplete()` | 100+ | Check for missing translations | Validation function |
+
+**Target file**: `mybot/i18n.py`
+
+**Key requirement**: Must read existing `Languages/*.ini` files without modification. Use `configparser` to parse them.
+
+### 6.7 Other Utilities (Other/ directory — 60 files)
+
+Files to translate in Phase 1 (infrastructure utilities):
+
+| Source file | Lines | Funcs | Target file | Priority |
+|-------------|-------|-------|-------------|----------|
+| `StopWatch.au3` | 120 | 11 | `mybot/utils/timer.py` | HIGH — used for timing |
+| `Time.au3` | 160 | 6 | `mybot/utils/time.py` | HIGH — time formatting |
+| `_TicksToDay.au3` | 30 | 1 | _(inline in timer.py)_ | LOW |
+| `_StatusUpdateTime.au3` | 22 | 1 | _(inline in timer.py)_ | LOW |
+| `_NumberFormat.au3` | 33 | 1 | `mybot/utils/formatting.py` | LOW |
+| `_PadStringCenter.au3` | 38 | 1 | _(inline)_ | LOW |
+| `Base64.au3` | 134 | 9 | `base64` stdlib | NONE — use stdlib |
+| `Json.au3` | 552 | 23 | `json` stdlib | NONE — use stdlib |
+| `CreateLogFile.au3` | 127 | 3 | _(part of log.py)_ | MEDIUM |
+| `DeleteFiles.au3` | 68 | 1 | _(inline)_ | LOW |
+| `KillProcess.au3` | 58 | 1 | _(use psutil)_ | LOW |
+| `RestartBot.au3` | 49 | 1 | `mybot/utils/restart.py` | MEDIUM |
+| `CheckVersion.au3` | 75 | 4 | `mybot/utils/version.py` | LOW |
+| `CheckPrerequisites.au3` | 153 | 6 | `mybot/utils/prerequisites.py` | MEDIUM |
+| `TogglePause.au3` | 99 | 4 | `mybot/bot.py` (pause method) | MEDIUM |
+| `Tab.au3` | 22 | 1 | _(not needed)_ | NONE |
+| `GUICtrlGetBkColor.au3` | 24 | 1 | _(PyQt6 native)_ | NONE |
+
+**Files deferred to later phases** (depend on Android/GUI):
+- `Click.au3`, `ClickDrag.au3`, `ClickRemove.au3`, `ClickOkay.au3`, `ClickZoneR.au3` → Phase 2
+- `MakeScreenshot.au3`, `FindPos.au3`, `FindAButton.au3` → Phase 2
+- `MBRFunc.au3`, `BinaryCall.au3` → Phase 3 (DLL replacement)
+- `WindowsArrange.au3`, `AppUserModelId.au3`, `WindowSystemMenu.au3` → Phase 6 (GUI)
+- `Api.au3`, `ApiClient.au3`, `ApiHost.au3` → Phase 6
+- `Notify.au3` → Phase 6
+- `UpdateStats.au3`, `UpdateStats.Mini.au3` → Phase 6
+- All remaining Other/ files → Phase they logically belong to
+
+### Phase 1 Deliverable
+
+A Python project that can:
+1. Load a profile config from existing INI file
+2. Save config back to INI
+3. Log messages with color levels
+4. Read translations from existing language .ini files
+5. Provide cancellable sleep with stop/restart checking
+6. Run with `python -m mybot` (no functionality yet, just infrastructure)
+
+### Phase 1 Validation Checklist
+
+- [ ] `pytest` passes with >80% coverage on config read/write
+- [ ] Round-trip test: read existing INI → write → diff shows no changes
+- [ ] Language loading test: load English.ini, verify all sections parse
+- [ ] `bot_sleep()` test: verify interruption within 50ms
+- [ ] `mypy --strict` passes on all Phase 1 modules
+- [ ] `ruff check` passes with zero warnings
