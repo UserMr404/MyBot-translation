@@ -1220,3 +1220,214 @@ Python modules that can:
 - [ ] Donation correctly identifies requested troops
 - [ ] Multi-account switching works for 2+ accounts
 - [ ] Builder Base detection and operations work
+
+---
+
+## 10. Phase 5: Army Training & Attack Systems
+
+**Priority**: HIGH — the core "bot" functionality
+**Source lines**: ~21,275 (CreateArmy 7,070 + Attack 13,561 + MOD 644)
+**Target files**: ~35 Python modules
+**Dependencies**: Phase 1-4 (all previous phases)
+
+### 10.1 Army Training System
+
+**Source directory**: `COCBot/functions/CreateArmy/` (7,070 lines, 110+ functions, 30+ files)
+
+#### Core Training
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `TrainSystem.au3` | 1,607 | 39 | `mybot/army/train.py` | `TrainSystem()` — main orchestrator. Calls `CheckIfArmyIsReady()`, `QuickTrain()`/`TrainCustomArmy()`, `TrainSiege()`. 39 sub-functions for different training phases |
+| `QuickTrain.au3` | 583 | 4 | `mybot/army/quick_train.py` | `QuickTrain()`, `CheckQuickTrainTroop()`, `TrainArmyNumber()` |
+| `DoubleTrain.au3` | 353 | 7 | `mybot/army/double_train.py` | `DoubleTrain()` — train second army while first fights |
+| `openArmyOverview.au3` | 314 | 10 | `mybot/army/army_overview.py` | `OpenArmyOverview()` — open army tab, navigate sub-tabs |
+| `TrainSiege.au3` | 209 | 7 | `mybot/army/train_siege.py` | `TrainSiege()` — train siege machines |
+| `TrainIt.au3` | 161 | 3 | `mybot/army/train_it.py` | `TrainIt()` — execute training clicks for specific troop |
+| `checkArmyCamp.au3` | 139 | 3 | `mybot/army/check_camp.py` | `checkArmyCamp()` — verify army camp contents |
+| `TrainClick.au3` | 77 | 2 | `mybot/army/train_click.py` | `TrainClick()` — click training buttons with quantity |
+| `SmartWait4Train.au3` | 68 | 1 | `mybot/army/smart_wait.py` | `SmartWait4Train()` — calculate optimal wait time |
+| `CheckFullArmy.au3` | 68 | 1 | `mybot/army/check_full.py` | `CheckFullArmy()` — determine if army is complete |
+
+#### Army Reading (detect what's currently trained)
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `getArmyHeroes/getArmyHeroCount.au3` | 2,226 | 17 | `mybot/army/read_heroes.py` |
+| `getArmyHeroes/getArmyHeroTime.au3` | 131 | 1 | `mybot/army/read_heroes.py` |
+| `getArmyTroops/getArmyTroops.au3` | 93 | 1 | `mybot/army/read_troops.py` |
+| `getArmyTroops/getArmyTroopCapacity.au3` | 141 | 1 | `mybot/army/read_troops.py` |
+| `getArmyTroops/getArmyTroopTime.au3` | 47 | 1 | `mybot/army/read_troops.py` |
+| `getArmySpells/getArmySpells.au3` | 74 | 1 | `mybot/army/read_spells.py` |
+| `getArmySpells/getArmySpellCapacity.au3` | 79 | 1 | `mybot/army/read_spells.py` |
+| `getArmySpells/getArmySpellCount.au3` | 25 | 1 | `mybot/army/read_spells.py` |
+| `getArmySpells/getArmySpellTime.au3` | 40 | 1 | `mybot/army/read_spells.py` |
+| `getArmySiegeMachines/getArmySiegeMachines.au3` | 127 | 1 | `mybot/army/read_siege.py` |
+| `getArmyCCTroops/getArmyCCTroops.au3` | 101 | 1 | `mybot/army/read_cc.py` |
+| `getArmyCCTroops/getArmyCCStatus.au3` | 56 | 1 | `mybot/army/read_cc.py` |
+| `getArmyCCSpells/getArmyCCSpell.au3` | 134 | 2 | `mybot/army/read_cc.py` |
+| `getArmyCCSpells/getArmyCCSpellCapacity.au3` | 72 | 1 | `mybot/army/read_cc.py` |
+| `getArmyCCSiegeMachines/getArmyCCSiegeMachines.au3` | 145 | 3 | `mybot/army/read_cc.py` |
+
+### 10.2 Attack System
+
+**Source directory**: `COCBot/functions/Attack/` (13,561 lines, 150+ functions, 50+ files)
+
+#### Attack Preparation & Execution
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `PrepareAttack.au3` | 463 | 5 | `mybot/attack/prepare.py` | `PrepareAttack()` — set up attack: read troop bar, select mode |
+| `GetAttackBar.au3` | 513 | 9 | `mybot/attack/attack_bar.py` | `GetAttackBar()` — read troop slots from bottom bar during battle |
+| `ReturnHome.au3` | 424 | 5 | `mybot/attack/return_home.py` | `ReturnHome()` — end battle, collect stars/loot |
+| `AttackReport.au3` | 292 | 2 | `mybot/attack/report.py` | `AttackReport()` — log attack results |
+| `AttackStats.au3` | 164 | 6 | `mybot/attack/stats.py` | Attack statistics tracking |
+| `BuildingSide.au3` | 173 | 5 | `mybot/attack/building_side.py` | Determine which side buildings are on |
+| `unbreakable.au3` | 151 | 1 | `mybot/attack/unbreakable.py` | Unbreakable defense achievement |
+| `GoldElixirChangeEBO.au3` | 312 | 1 | `mybot/attack/resource_change.py` | Track resource changes during attack |
+| `GoldElixirChangeThSnipes.au3` | 76 | 1 | `mybot/attack/resource_change.py` | TH snipe resource tracking |
+
+#### Attack Algorithms
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `Attack Algorithms/SmartFarm.au3` | 950 | 10 | `mybot/attack/algorithms/smart_farm.py` | `SmartFarm()` — intelligent farming: target collectors, deploy troops near loot |
+| `Attack Algorithms/AttackFromCSV.au3` | 949 | 6 | `mybot/attack/algorithms/csv_attack.py` | `Algorithm_AttackCSV()` — execute CSV-scripted attacks |
+| `Attack Algorithms/algorithm_AllTroops.au3` | 559 | 4 | `mybot/attack/algorithms/all_troops.py` | `algorithm_AllTroops()` — deploy all troops on one or multiple sides |
+
+#### CSV Attack Script Engine
+
+| Source file | Lines | Funcs | Target file | Notes |
+|-------------|-------|-------|-------------|-------|
+| `AttackCSV/ParseAttackCSV.au3` | 1,075 | 4 | `mybot/attack/csv/parser.py` | **CRITICAL**: Uses `Assign()` and `Eval()` heavily for dynamic vector creation. Must replace with dict-based system |
+| `AttackCSV/DropTroopFromINI.au3` | 312 | 1 | `mybot/attack/csv/drop.py` | Execute DROP command from CSV |
+| `AttackCSV/MakeDropPoints.au3` | 303 | 2 | `mybot/attack/csv/drop_points.py` | Calculate drop point coordinates from MAKE vectors |
+| `AttackCSV/MakeDropLine.au3` | 126 | 2 | `mybot/attack/csv/drop_line.py` | Calculate line-based drop points |
+| `AttackCSV/AttackCSVDebugImage.au3` | 392 | 1 | `mybot/attack/csv/debug.py` | Debug visualization of CSV attacks |
+| `AttackCSV/ParseAttackCSV_Settings_variables.au3` | 219 | 1 | `mybot/attack/csv/settings.py` | CSV script global settings |
+| `AttackCSV/ParseAttackCSV_Read_SIDE_variables.au3` | 134 | 1 | `mybot/attack/csv/sides.py` | Parse SIDE/SIDEB commands |
+| `AttackCSV/Slice8.au3` | 141 | 1 | `mybot/attack/csv/slice.py` | Divide edge into 8 segments |
+| `AttackCSV/CheckCSVValues.au3` | 110 | 1 | `mybot/attack/csv/validate.py` | Validate CSV script syntax |
+| `AttackCSV/GetListPixel3.au3` | 36 | 1 | `mybot/attack/csv/pixels.py` | Pixel list for CSV |
+| `AttackCSV/IsInsideDiamondRedArea.au3` | 35 | 1 | `mybot/attack/csv/geometry.py` | Diamond boundary check |
+| `AttackCSV/Line2Points.au3` | 20 | 1 | `mybot/attack/csv/geometry.py` | Line interpolation |
+| `AttackCSV/CleanRedArea.au3` | 29 | 1 | `mybot/attack/csv/clean.py` | Clean cached red area |
+| `AttackCSV/ChkAttackCSVConfig.au3` | 30 | 1 | `mybot/attack/csv/validate.py` | Check CSV config |
+| `AttackCSV/DebugAttackCSV.au3` | 22 | 1 | `mybot/attack/csv/debug.py` | Debug toggle |
+
+**CSV parser translation (CRITICAL — uses Assign/Eval):**
+```python
+# mybot/attack/csv/parser.py
+@dataclass
+class AttackVector:
+    side: str
+    points: list[tuple[int, int]]
+    index_range: range
+
+class CSVAttackScript:
+    def __init__(self, path: Path):
+        self.vectors: dict[str, AttackVector] = {}  # Replaces Assign("ATTACKVECTOR_X", ...)
+        self.commands: list[CSVCommand] = []
+        self._parse(path)
+
+    def _parse(self, path: Path) -> None:
+        for line in path.read_text().splitlines():
+            parts = line.split("|")
+            cmd = parts[0].strip()
+            if cmd == "MAKE":
+                self.vectors[parts[1].strip()] = AttackVector(...)
+            elif cmd == "DROP":
+                self.commands.append(DropCommand(...))
+            # ... etc
+
+    def execute(self, bot: BotState) -> None:
+        for cmd in self.commands:
+            cmd.execute(bot)
+```
+
+#### Red Area / Deployment Zone
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `RedArea/GetLocation.au3` | 473 | 12 | `mybot/attack/location.py` | `GetLocationTownHall()`, `GetLocationDarkElixirStorage()`, `GetLocationMineExtractor()`, etc. — all use DllCallMyBot for image search |
+| `RedArea/_GetRedArea.au3` | 468 | 11 | `mybot/attack/red_area.py` | `_GetRedArea()` — detect valid troop deployment zone |
+| `RedArea/PointInPoly.au3` | 341 | 5 | `mybot/attack/geometry.py` | `PointInPoly()` — point-in-polygon test for deployment validation |
+| `RedArea/DropTroop.au3` | 197 | 2 | `mybot/attack/deploy.py` | `DropTroop()` — deploy troop at coordinates |
+| `RedArea/DropOnPixel.au3` | 85 | 1 | `mybot/attack/deploy.py` | `DropOnPixel()` — deploy on specific pixel |
+| `RedArea/_GetOffsetTroopFurther.au3` | 104 | 1 | `mybot/attack/geometry.py` | Offset troop position further from base |
+| `RedArea/GetVectorPixelOnEachSide.au3` | 64 | 1 | `mybot/attack/geometry.py` | Get deployment pixels per side |
+| `RedArea/GetPixelDropTroop.au3` | 59 | 1 | `mybot/attack/geometry.py` | Calculate pixel for troop drop |
+| `RedArea/GetOffestPixelRedArea2.au3` | 54 | 1 | `mybot/attack/geometry.py` | Red area offset calculation |
+| `RedArea/_GetVectorOutZone.au3` | 67 | 1 | `mybot/attack/geometry.py` | Vectors outside deployment zone |
+| `RedArea/_FindPixelCloser.au3` | 63 | 1 | `mybot/attack/geometry.py` | Find closest valid pixel |
+| `RedArea/GetPixelSide.au3` | 23 | 1 | `mybot/attack/geometry.py` | Get pixel side classification |
+| `RedArea/DebugRedArea.au3` | 21 | 1 | `mybot/attack/debug.py` | Red area debug visualization |
+
+#### Troop Management
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `Troops/CheckHeroesHealth.au3` | 269 | 1 | `mybot/attack/heroes.py` | `CheckHeroesHealth()` — monitor hero HP during battle, activate ability |
+| `Troops/LaunchTroop.au3` | 269 | 2 | `mybot/attack/launch.py` | `LaunchTroop()` — deploy troop from bar to battlefield |
+| `Troops/DropOrderTroops.au3` | 241 | 4 | `mybot/attack/drop_order.py` | `DropOrderTroops()` — custom troop deployment order |
+| `Troops/dropHeroes.au3` | 173 | 7 | `mybot/attack/heroes.py` | `dropKing()`, `dropQueen()`, `dropWarden()`, `dropChampion()`, `dropPrince()` |
+| `Troops/ReadTroopQuantity.au3` | 81 | 3 | `mybot/attack/troop_quantity.py` | Read troop counts from attack bar |
+| `Troops/DropOnEdge.au3` | 75 | 1 | `mybot/attack/deploy.py` | Deploy troops on edge |
+| `Troops/DropOnEdges.au3` | 55 | 1 | `mybot/attack/deploy.py` | Deploy on multiple edges |
+| `Troops/dropCC.au3` | 58 | 1 | `mybot/attack/deploy.py` | Deploy clan castle troops |
+| `Troops/SetSleep.au3` | 55 | 2 | `mybot/attack/timing.py` | Set deployment delays |
+| `Troops/SelectDropTroop.au3` | 38 | 2 | `mybot/attack/select.py` | Select troop in attack bar |
+| `Troops/OldDropTroop.au3` | 24 | 1 | _(deprecated, skip)_ | Legacy drop function |
+| `Troops/GetSlotIndexFromXPos.au3` | 21 | 1 | `mybot/attack/attack_bar.py` | Map X position to troop slot |
+
+#### Smart Zap (Dark Elixir stealing)
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `SmartZap/smartZap.au3` | 652 | 7 | `mybot/attack/smart_zap.py` |
+| `SmartZap/drillSearch.au3` | 142 | 3 | `mybot/attack/drill_search.py` |
+| `SmartZap/easyPreySearch.au3` | 89 | 1 | `mybot/attack/easy_prey.py` |
+
+#### Builder Base Attack
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `BuilderBase/AttackBB.au3` | 881 | 23 | `mybot/attack/builder_base/attack.py` |
+| `BuilderBase/PrepareAttackBB.au3` | 249 | 9 | `mybot/attack/builder_base/prepare.py` |
+| `BuilderBase/GetAttackBarBB.au3` | 160 | 1 | `mybot/attack/builder_base/attack_bar.py` |
+
+### 10.3 MOD / Attack Modes
+
+**Source directory**: `COCBot/functions/MOD/` (644 lines, 6 functions, 6 files)
+
+| Source file | Lines | Funcs | Target file | Notes |
+|-------------|-------|-------|-------------|-------|
+| `AttackCycle.au3` | 154 | 1 | `mybot/attack/cycle.py` | Main attack loop coordinator — calls donate, upgrade, then attack |
+| `BBSpam.au3` | 158 | 1 | `mybot/attack/modes/bb_spam.py` | Builder Base spam attack mode |
+| `CCSpam.au3` | 82 | 1 | `mybot/attack/modes/cc_spam.py` | Clan Castle spam mode |
+| `DirectAttack.au3` | 83 | 1 | `mybot/attack/modes/direct.py` | Direct attack without searching |
+| `RankedBattle.au3` | 91 | 1 | `mybot/attack/modes/ranked.py` | Ranked battle mode |
+| `RevengeBattle.au3` | 76 | 1 | `mybot/attack/modes/revenge.py` | Revenge attack mode |
+
+### Phase 5 Deliverable
+
+Python modules that can:
+1. Read current army composition (troops, spells, heroes, siege, CC)
+2. Train army via Quick Train or custom composition
+3. Execute attacks using all algorithms (AllTroops, CSV, SmartFarm)
+4. Parse and execute CSV attack scripts without `eval()`
+5. Detect red deployment zone and calculate drop points
+6. Deploy troops with proper timing and ordering
+7. Monitor hero health and activate abilities
+8. Handle Builder Base attacks
+
+### Phase 5 Validation Checklist
+
+- [ ] Army reading matches actual troop counts in all slots
+- [ ] Quick Train correctly trains configured army
+- [ ] CSV parser handles all 20+ existing CSV scripts
+- [ ] CSV attack execution produces same troop drops as AutoIt version
+- [ ] Red area detection matches expected deployment zone
+- [ ] Hero ability activation fires at correct HP threshold
+- [ ] SmartFarm targets correct collector positions
+- [ ] Attack return home correctly reads loot gained
