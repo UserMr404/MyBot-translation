@@ -1044,3 +1044,179 @@ A Python vision module that can:
 - [ ] Dead base detection works on sample collector images
 - [ ] Pixel color checking works at all game screen positions
 - [ ] Performance: full template directory search < 2 seconds
+
+---
+
+## 9. Phase 4: Game Logic — Village, Search & Main Screen
+
+**Priority**: HIGH — core gameplay automation
+**Source lines**: ~29,984 (Village 25,434 + Search 2,572 + Main Screen 1,978)
+**Target files**: ~40 Python modules
+**Dependencies**: Phase 1-3 (config, android, vision)
+
+### 9.1 Main Screen Detection
+
+**Source directory**: `COCBot/functions/Main Screen/` (1,978 lines, 46 functions, 9 files)
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `checkObstacles.au3` | 850 | 16 | `mybot/game/obstacles.py` | `checkObstacles()` — detect & dismiss error popups, maintenance, connection lost, rate limits. Uses image matching for ~20 different popup types |
+| `RemoveGhostTrayIcons.au3` | 646 | 15 | `mybot/system/tray.py` | Heavy Win32 API: `ReadProcessMemory`, `SendMessage`, toolbar button enumeration. Uses 15 DllCalls. Consider skipping or simplifying |
+| `checkMainScreen.au3` | 142 | 4 | `mybot/game/main_screen.py` | `checkMainScreen()`, `IsMainPage()`, `IsMainPageOffset()` — verify bot is on village screen via pixel checks |
+| `waitMainScreen.au3` | 116 | 2 | `mybot/game/main_screen.py` | `waitMainScreen()` — wait for main screen with timeout |
+| `GetDPI_Ratio.au3` | 75 | 3 | `mybot/system/dpi.py` | DPI detection via `GetDeviceCaps`. Uses DllCall to gdi32.dll |
+| `isOnBuilderBase.au3` | 56 | 3 | `mybot/game/main_screen.py` | `isOnBuilderBase()` — detect if on Builder Base via pixel color |
+| `isProblemAffect.au3` | 36 | 1 | `mybot/game/obstacles.py` | `isProblemAffect()` — check for known issues |
+| `isGemOpen.au3` | 31 | 1 | `mybot/game/obstacles.py` | `isGemOpen()` — detect gem purchase dialog |
+| `isNoUpgradeLoot.au3` | 26 | 1 | `mybot/game/obstacles.py` | `isNoUpgradeLoot()` — detect insufficient resources dialog |
+
+### 9.2 Search System
+
+**Source directory**: `COCBot/functions/Search/` (2,572 lines, 58 functions, 11 files)
+
+| Source file | Lines | Funcs | Target file | Key functions |
+|-------------|-------|-------|-------------|---------------|
+| `WeakBase.au3` | 621 | 14 | `mybot/search/weak_base.py` | `checkDefense()` — scan for defense levels using image templates, calculate weakness score |
+| `VillageSearch.au3` | 580 | 4 | `mybot/search/search.py` | `VillageSearch()`, `_VillageSearch()` — main search loop: cycle through bases, check loot, match criteria |
+| `multiSearch.au3` | 277 | 12 | `mybot/search/multi.py` | `multiSearch()` — DllCallMyBot wrapper for multi-template search. In Python, call `vision.matcher` directly |
+| `IsSearchAttackEnabled.au3` | 254 | 9 | `mybot/search/filters.py` | `IsSearchAttackEnabled()` — check if attack mode is configured for current mode |
+| `WaitForClouds.au3` | 213 | 6 | `mybot/search/clouds.py` | `WaitForClouds()` — handle cloud screen during matchmaking, with timeout |
+| `IsSearchModeActive.au3` | 193 | 5 | `mybot/search/filters.py` | `IsSearchModeActive()` — check if specific search mode is active |
+| `PrepareSearch.au3` | 143 | 2 | `mybot/search/prepare.py` | `PrepareSearch()` — open attack screen, set up search parameters |
+| `CompareResources.au3` | 129 | 2 | `mybot/search/resources.py` | `CompareResources()` — compare target base loot against thresholds |
+| `GetResources.au3` | 86 | 2 | `mybot/search/resources.py` | `GetResources()` — OCR read gold/elixir/DE/trophies from search screen |
+| `FindTownHall.au3` | 42 | 1 | `mybot/search/townhall.py` | `FindTownHall()` — detect TH level via image matching |
+| `CheckZoomOut.au3` | 34 | 1 | `mybot/search/prepare.py` | `CheckZoomOut()` — verify zoom level during search |
+
+### 9.3 Village Management
+
+**Source directory**: `COCBot/functions/Village/` (25,434 lines, 200+ functions, 53+ files)
+
+This is the **largest module**. Organized by sub-function:
+
+#### Resource Collection
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `Collect.au3` | 168 | 2 | `mybot/village/collect.py` |
+| `CollectAchievements.au3` | 112 | 3 | `mybot/village/achievements.py` |
+| `TreasuryCollect.au3` | 95 | 1 | `mybot/village/treasury.py` |
+| `FreeMagicItems.au3` | 164 | 3 | `mybot/village/magic_items.py` |
+| `isDarkElixirFull.au3` | 36 | 1 | `mybot/village/resources.py` |
+| `isGoldFull.au3` | 31 | 1 | `mybot/village/resources.py` |
+| `isElixirFull.au3` | 31 | 1 | `mybot/village/resources.py` |
+| `isAtkDarkElixirFull.au3` | 22 | 1 | `mybot/village/resources.py` |
+| `GainCost.au3` | 93 | 2 | `mybot/village/gain_cost.py` |
+| `AddIdleTime.au3` | 24 | 1 | `mybot/village/idle.py` |
+
+#### Donations & Clan
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `DonateCC.au3` | 1,955 | 20 | `mybot/village/donate.py` |
+| `DonateCCWBL.au3` | 125 | 1 | `mybot/village/donate.py` |
+| `RequestCC.au3` | 570 | 7 | `mybot/village/request.py` |
+| `ClanCapital.au3` | 1,720 | 26 | `mybot/village/clan_capital.py` |
+| `Clan Games/ClanGames.au3` | 2,802 | 33 | `mybot/village/clan_games.py` |
+
+#### Upgrades
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `UpgradeHeroes.au3` | 1,863 | 11 | `mybot/village/upgrade_heroes.py` |
+| `UpgradeBuilding.au3` | 375 | 3 | `mybot/village/upgrade_building.py` |
+| `UpgradeWall.au3` | 354 | 5 | `mybot/village/upgrade_wall.py` |
+| `Auto Upgrade.au3` | 544 | 5 | `mybot/village/auto_upgrade.py` |
+| `LocateUpgrade.au3` | 448 | 5 | `mybot/village/locate_upgrade.py` |
+| `Laboratory.au3` | 403 | 11 | `mybot/village/laboratory.py` |
+
+#### Special Buildings
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `HelperHut.au3` | 1,518 | 7 | `mybot/village/helper_hut.py` |
+| `PetHouse.au3` | 944 | 8 | `mybot/village/pet_house.py` |
+| `Blacksmith.au3` | 416 | 3 | `mybot/village/blacksmith.py` |
+| `BoostSuperTroop.au3` | 465 | 7 | `mybot/village/boost_super_troop.py` |
+| `BoostBarracks.au3` | 116 | 5 | `mybot/village/boost.py` |
+| `BoostHeroes.au3` | 123 | 6 | `mybot/village/boost.py` |
+| `BoostStructure.au3` | 157 | 3 | `mybot/village/boost.py` |
+
+#### Multi-Account & Profile
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `SwitchAccount.au3` | 954 | 19 | `mybot/village/switch_account.py` |
+| `SwitchAccountVariablesReload.au3` | 693 | 1 | `mybot/village/switch_account.py` |
+| `SwitchBetweenBases.au3` | 141 | 2 | `mybot/village/switch_base.py` |
+| `ProfileReport.au3` | 110 | 1 | `mybot/village/profile_report.py` |
+
+#### Village Status & Utility
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `VillageReport.au3` | 68 | 1 | `mybot/village/report.py` |
+| `GetVillageSize.au3` | 513 | 5 | `mybot/village/village_size.py` |
+| `GetTownHallLevel.au3` | 59 | 1 | `mybot/village/townhall.py` |
+| `BotCommand.au3` | 302 | 4 | `mybot/bot.py` (command handler) |
+| `BotDetectFirstTime.au3` | 121 | 1 | `mybot/village/first_time.py` |
+| `DropTrophy.au3` | 349 | 2 | `mybot/village/drop_trophy.py` |
+| `chkShieldStatus.au3` | 90 | 2 | `mybot/village/shield.py` |
+| `BreakPersonalShield.au3` | 83 | 1 | `mybot/village/shield.py` |
+| `ReplayShare.au3` | 82 | 1 | `mybot/village/replay.py` |
+| `StarBonus.au3` | 35 | 1 | `mybot/village/star_bonus.py` |
+| `CheckBaseQuick.au3` | 76 | 1 | `mybot/village/base_check.py` |
+| `CheckNeedOpenTrain.au3` | 49 | 1 | `mybot/village/train_check.py` |
+| `CheckImageType.au3` | 33 | 1 | `mybot/village/image_type.py` |
+| `ConvertOCRTime.au3` | 66 | 1 | `mybot/village/time_convert.py` |
+| `Notify.au3` | 780 | 16 | `mybot/notifications.py` |
+| `Personal Challenges/DailyChallenges.au3` | 201 | 5 | `mybot/village/daily_challenges.py` |
+
+#### Building Location
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `LocateTownHall.au3` | 103 | 1 | `mybot/village/locate.py` |
+| `LocateClanCastle.au3` | 152 | 1 | `mybot/village/locate.py` |
+| `LocateLab.au3` | 165 | 3 | `mybot/village/locate.py` |
+| `LocateHeroHall.au3` | 167 | 3 | `mybot/village/locate.py` |
+| `LocatePetHouse.au3` | 160 | 3 | `mybot/village/locate.py` |
+| `LocateBlacksmith.au3` | 160 | 3 | `mybot/village/locate.py` |
+| `LocateHelperHut.au3` | 146 | 3 | `mybot/village/locate.py` |
+
+#### Builder Base
+
+| Source file | Lines | Funcs | Target file |
+|-------------|-------|-------|-------------|
+| `BuilderBase/LocateBuilderHall.au3` | 1,076 | 9 | `mybot/village/builder_base/locate.py` |
+| `BuilderBase/BOBBuildingUpgrades.au3` | 622 | 5 | `mybot/village/builder_base/upgrades.py` |
+| `BuilderBase/SuggestedUpgrades.au3` | 579 | 10 | `mybot/village/builder_base/suggested.py` |
+| `BuilderBase/StarLaboratory.au3` | 520 | 7 | `mybot/village/builder_base/star_lab.py` |
+| `BuilderBase/UpgradeBattleCopter.au3` | 310 | 5 | `mybot/village/builder_base/battle_copter.py` |
+| `BuilderBase/UpgradeBattleMachine.au3` | 281 | 4 | `mybot/village/builder_base/battle_machine.py` |
+| `BuilderBase/BuilderBaseReport.au3` | 201 | 2 | `mybot/village/builder_base/report.py` |
+| `BuilderBase/Collect.au3` | 113 | 2 | `mybot/village/builder_base/collect.py` |
+| `BuilderBase/StartClockTowerBoost.au3` | 112 | 2 | `mybot/village/builder_base/clock_tower.py` |
+| `BuilderBase/CleanBBYard.au3` | 88 | 2 | `mybot/village/builder_base/clean_yard.py` |
+
+### Phase 4 Deliverable
+
+Python modules that can:
+1. Verify bot is on main village screen
+2. Detect and dismiss all obstacle popups
+3. Search for enemy bases with loot filtering
+4. Collect resources from mines/collectors
+5. Donate troops to clan castle
+6. Manage upgrades (buildings, walls, heroes, lab)
+7. Switch between multiple accounts
+8. Handle Builder Base operations
+
+### Phase 4 Validation Checklist
+
+- [ ] `checkMainScreen()` correctly identifies main village screen
+- [ ] `checkObstacles()` handles all 20+ popup types
+- [ ] Search loop finds bases matching loot criteria
+- [ ] Resource collection clicks all available collectors
+- [ ] Donation correctly identifies requested troops
+- [ ] Multi-account switching works for 2+ accounts
+- [ ] Builder Base detection and operations work
