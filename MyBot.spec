@@ -34,7 +34,7 @@ datas = [
 datas = [(src, dst) for src, dst in datas if os.path.exists(src)]
 
 a = Analysis(
-    [str(ROOT / 'mybot' / 'app.py')],
+    [str(ROOT / 'mybot' / '__main__.py')],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,
