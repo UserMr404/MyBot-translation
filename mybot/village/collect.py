@@ -14,6 +14,7 @@ from typing import Callable
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.log import set_debug_log, set_log
 from mybot.vision.pixel import is_inside_diamond
 
@@ -54,9 +55,9 @@ def collect_resources(
     """
     if collector_dirs is None:
         collector_dirs = [
-            Path("imgxml/Resources/GoldMine"),
-            Path("imgxml/Resources/ElixirCollector"),
-            Path("imgxml/Resources/DarkElixirDrill"),
+            resolve_img_dir("imgxml/Resources/GoldMine"),
+            resolve_img_dir("imgxml/Resources/ElixirCollector"),
+            resolve_img_dir("imgxml/Resources/DarkElixirDrill"),
         ]
 
     result = CollectResult()

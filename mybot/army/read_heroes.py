@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import HERO_NAMES, HERO_SHORT_NAMES, MID_OFFSET_Y
 from mybot.enums import Hero
 from mybot.log import set_debug_log
@@ -48,7 +49,7 @@ def get_army_heroes(
     statuses = [HeroStatus() for _ in range(Hero.COUNT)]
 
     if template_dir is None:
-        template_dir = Path("imgxml/ArmyOverview/Heroes")
+        template_dir = resolve_img_dir("imgxml/ArmyOverview/Heroes")
 
     if not template_dir.is_dir():
         return statuses

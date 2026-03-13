@@ -16,6 +16,7 @@ from typing import Callable
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import MID_OFFSET_Y, UPGRADE_SLOTS
 from mybot.log import set_debug_log, set_log
 from mybot.vision.ocr import get_building_info, get_upgrade_cost, get_upgrade_time
@@ -137,7 +138,7 @@ def start_upgrade(
     time.sleep(0.5)
 
     # Find upgrade button in the building menu
-    upgrade_btn_dir = Path("imgxml/imglocbuttons/UpgradeButton")
+    upgrade_btn_dir = resolve_img_dir("imgxml/imglocbuttons/UpgradeButton")
     if not upgrade_btn_dir.is_dir():
         result.error = "Upgrade button templates not found"
         return result

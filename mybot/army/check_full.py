@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.log import set_debug_log, set_log
 
 
@@ -31,7 +32,7 @@ def check_full_army(
     Returns:
         True if army is full and ready for battle.
     """
-    full_dir = Path("imgxml/ArmyOverview/ArmyFull")
+    full_dir = resolve_img_dir("imgxml/ArmyOverview/ArmyFull")
 
     if full_dir.is_dir():
         from mybot.vision.matcher import find_image

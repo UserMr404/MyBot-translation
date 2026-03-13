@@ -18,6 +18,7 @@ from typing import Callable
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.log import set_debug_log, set_log
 from mybot.vision.ocr import get_building_info
 from mybot.vision.pixel import is_inside_diamond
@@ -162,7 +163,7 @@ def locate_lab(
     Translated from LocateLab() in Laboratory.au3.
     """
     if lab_dir is None:
-        lab_dir = Path("imgxml/Buildings/Laboratory")
+        lab_dir = resolve_img_dir("imgxml/Buildings/Laboratory")
     return locate_building(image, lab_dir, expected_name="Laboratory")
 
 
@@ -175,7 +176,7 @@ def locate_clan_castle(
     Translated from LocateClanCastle().
     """
     if cc_dir is None:
-        cc_dir = Path("imgxml/Buildings/ClanCastle")
+        cc_dir = resolve_img_dir("imgxml/Buildings/ClanCastle")
     return locate_building(image, cc_dir, expected_name="Clan Castle")
 
 
@@ -185,7 +186,7 @@ def locate_spell_factory(
 ) -> BuildingLocation:
     """Locate the Spell Factory building."""
     if sf_dir is None:
-        sf_dir = Path("imgxml/Buildings/SpellFactory")
+        sf_dir = resolve_img_dir("imgxml/Buildings/SpellFactory")
     return locate_building(image, sf_dir, expected_name="Spell Factory")
 
 
@@ -218,7 +219,7 @@ def locate_hero_altar(
     if altar_dirs and hero_index in altar_dirs:
         altar_dir = altar_dirs[hero_index]
     else:
-        altar_dir = Path(f"imgxml/Buildings/HeroAltar/{hero_index}")
+        altar_dir = resolve_img_dir(f"imgxml/Buildings/HeroAltar/{hero_index}")
 
     name = hero_names.get(hero_index, f"Hero {hero_index}")
     return locate_building(image, altar_dir, expected_name=name)

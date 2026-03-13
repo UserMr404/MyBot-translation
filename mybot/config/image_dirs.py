@@ -1,13 +1,15 @@
 """Image template directory paths translated from ImageDirectories.au3.
 
-All paths are relative to the MyBot script directory.
-Resolved to absolute paths at runtime via resolve_image_dir().
+All paths are relative to the base directory (repo root or PyInstaller bundle).
+Resolved to absolute paths at runtime via resolve().
 """
 
 from pathlib import Path
 
-# Set at startup to the MyBot/ directory
-_script_dir: Path = Path()
+from mybot.utils.paths import get_base_dir
+
+# Set at startup to the base directory
+_script_dir: Path | None = None
 
 
 def set_script_dir(path: Path) -> None:
@@ -17,8 +19,13 @@ def set_script_dir(path: Path) -> None:
 
 
 def resolve(relative: str) -> Path:
-    """Resolve a relative imgxml path to absolute."""
-    return _script_dir / relative
+    """Resolve a relative imgxml path to absolute.
+
+    Uses the explicitly set script dir, falling back to the
+    PyInstaller-aware base dir from utils.paths.
+    """
+    base = _script_dir if _script_dir is not None else get_base_dir()
+    return base / relative
 
 
 # ── Windows ──────────────────────────────────────────────────────────────────

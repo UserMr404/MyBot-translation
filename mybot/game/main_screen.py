@@ -20,6 +20,7 @@ from mybot.config.coordinates import (
     IS_MAIN,
     IS_ON_BUILDER_BASE,
 )
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import MID_OFFSET_Y
 from mybot.log import set_debug_log, set_log
 
@@ -88,7 +89,7 @@ def check_network_error(image: np.ndarray) -> bool:
     """
     from mybot.vision.matcher import find_image
     # Check for reconnecting image template
-    reconnect_dir = Path("imgxml/other/reconnecting")
+    reconnect_dir = resolve_img_dir("imgxml/other/reconnecting")
     if not reconnect_dir.is_dir():
         return False
 
@@ -215,7 +216,7 @@ def is_on_builder_base(
         True if on Builder Base.
     """
     if bb_template_dir is None:
-        bb_template_dir = Path("imgxml/other/IsOnBB")
+        bb_template_dir = resolve_img_dir("imgxml/other/IsOnBB")
 
     if not bb_template_dir.is_dir():
         # Fallback to pixel check
@@ -248,7 +249,7 @@ def is_on_main_village(
         True if on Main Village.
     """
     if mv_template_dir is None:
-        mv_template_dir = Path("imgxml/other/IsOnMainVillage")
+        mv_template_dir = resolve_img_dir("imgxml/other/IsOnMainVillage")
 
     if not mv_template_dir.is_dir():
         return _check_pixel_tuple(image, IS_MAIN)

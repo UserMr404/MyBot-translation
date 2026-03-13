@@ -14,6 +14,7 @@ from typing import Callable
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import MID_OFFSET_Y
 from mybot.log import set_debug_log, set_log
 
@@ -30,11 +31,11 @@ class DonateConfig:
     donate_all: bool = False
     # Template directory for detecting donation requests
     request_template_dir: Path = field(
-        default_factory=lambda: Path("imgxml/DonateCC/Army")
+        default_factory=lambda: resolve_img_dir("imgxml/DonateCC/Army")
     )
     # Template directory for troop selection in donate window
     troop_template_dir: Path = field(
-        default_factory=lambda: Path("imgxml/DonateCC/Troops")
+        default_factory=lambda: resolve_img_dir("imgxml/DonateCC/Troops")
     )
 
 

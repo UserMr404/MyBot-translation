@@ -21,6 +21,7 @@ from mybot.attack.heroes import HeroBattleState, deploy_hero
 from mybot.attack.timing import get_deploy_delay, get_wave_delay
 from mybot.enums import ArmyIndex, Hero
 from mybot.log import set_debug_log, set_log
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.vision.geometry import pixel_distance
 from mybot.vision.red_area import RedArea
 
@@ -137,9 +138,9 @@ def _detect_collectors(
     targets = []
 
     collector_dirs = {
-        "gold": Path("imgxml/deadbase/Storages/Gold"),
-        "elixir": Path("imgxml/deadbase/Storages/Elixir"),
-        "dark": Path("imgxml/deadbase/Storages/Dark"),
+        "gold": resolve_img_dir("imgxml/deadbase/Storages/Gold"),
+        "elixir": resolve_img_dir("imgxml/deadbase/Storages/Elixir"),
+        "dark": resolve_img_dir("imgxml/deadbase/Storages/Dark"),
     }
 
     from mybot.vision.matcher import find_multiple

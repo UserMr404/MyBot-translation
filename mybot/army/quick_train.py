@@ -13,6 +13,7 @@ from typing import Callable
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import MID_OFFSET_Y
 from mybot.log import set_debug_log, set_log
 
@@ -64,7 +65,7 @@ def quick_train(
         return False
 
     # Check if the slot checkbox is selected (green check)
-    quick_train_dir = Path("imgxml/Train/QuickTrain")
+    quick_train_dir = resolve_img_dir("imgxml/Train/QuickTrain")
     if quick_train_dir.is_dir():
         from mybot.vision.matcher import find_image
         result = find_image(image, quick_train_dir, confidence=0.80)
@@ -91,7 +92,7 @@ def check_quick_train_troop(
         return False
 
     # Check for troop icons in the slot area
-    troop_dir = Path("imgxml/Train/QuickTrainTroops")
+    troop_dir = resolve_img_dir("imgxml/Train/QuickTrainTroops")
     if not troop_dir.is_dir():
         return True  # Assume configured if we can't check
 

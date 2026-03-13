@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import BOTTOM_OFFSET_Y, MID_OFFSET_Y, TROOP_SHORT_NAMES
 from mybot.enums import ArmyIndex
 from mybot.log import set_debug_log
@@ -83,7 +84,7 @@ def get_attack_bar(
     bar = AttackBar()
 
     if template_dir is None:
-        template_dir = Path("imgxml/ArmyOverview/TroopBar")
+        template_dir = resolve_img_dir("imgxml/ArmyOverview/TroopBar")
 
     if not template_dir.is_dir():
         return bar

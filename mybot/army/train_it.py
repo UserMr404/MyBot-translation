@@ -15,6 +15,7 @@ from typing import Callable
 import numpy as np
 
 from mybot.army.train_click import train_click
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.log import set_debug_log, set_log
 
 
@@ -45,7 +46,7 @@ def train_it(
         return True
 
     if template_dir is None:
-        template_dir = Path("imgxml/Train")
+        template_dir = resolve_img_dir("imgxml/Train")
 
     # Build specific template path for this troop
     troop_dir = template_dir / troop_name

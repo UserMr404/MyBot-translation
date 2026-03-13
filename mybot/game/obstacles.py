@@ -16,6 +16,7 @@ from typing import Callable
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import MID_OFFSET_Y, BOTTOM_OFFSET_Y
 from mybot.log import set_debug_log, set_log
 
@@ -182,7 +183,7 @@ def _check_network_reconnecting(image: np.ndarray) -> bool:
 
     From checkObstacles_Network() — checks for reconnecting animation.
     """
-    reconnect_dir = Path("imgxml/other/reconnecting")
+    reconnect_dir = resolve_img_dir("imgxml/other/reconnecting")
     if not reconnect_dir.is_dir():
         return False
 
@@ -246,7 +247,7 @@ def _check_feedback_survey(
 
     Checks for info button in top-right corner (740-840, 0-90+offset).
     """
-    no_thanks_dir = Path("imgxml/other/NoThanks")
+    no_thanks_dir = resolve_img_dir("imgxml/other/NoThanks")
     if not no_thanks_dir.is_dir():
         return False
 
@@ -268,7 +269,7 @@ def _check_maintenance(image: np.ndarray) -> bool:
 
     Checks for maintenance clock icon in the right portion of screen.
     """
-    maint_dir = Path("imgxml/other/maintenance")
+    maint_dir = resolve_img_dir("imgxml/other/maintenance")
     if not maint_dir.is_dir():
         # Fallback: check for black bars indicating loading screen
         black1 = _pixel_match(image, 10, 3, 0x000000, 5)
@@ -305,9 +306,9 @@ def _check_error_windows(
 
     # Try to find response buttons
     button_dirs = {
-        "TryAgain": Path("imgxml/other/TryAgain"),
-        "ReloadGame": Path("imgxml/other/ReloadGame"),
-        "OkayButton": Path("imgxml/other/OkayButton"),
+        "TryAgain": resolve_img_dir("imgxml/other/TryAgain"),
+        "ReloadGame": resolve_img_dir("imgxml/other/ReloadGame"),
+        "OkayButton": resolve_img_dir("imgxml/other/OkayButton"),
     }
 
     from mybot.vision.matcher import find_image
@@ -380,7 +381,7 @@ def _check_grayed_main(
 
     # Try to find OK/Confirm/Close buttons on the overlay
     for btn_dir_name in ("OkayButton", "ConfirmButton", "CloseWindow"):
-        btn_dir = Path(f"imgxml/other/{btn_dir_name}")
+        btn_dir = resolve_img_dir(f"imgxml/other/{btn_dir_name}")
         if not btn_dir.is_dir():
             continue
         from mybot.vision.matcher import find_image
@@ -416,7 +417,7 @@ def _check_grayed_builder_base(
 
     # Try OK/Close buttons
     for btn_dir_name in ("OkayButton", "CloseWindow"):
-        btn_dir = Path(f"imgxml/other/{btn_dir_name}")
+        btn_dir = resolve_img_dir(f"imgxml/other/{btn_dir_name}")
         if not btn_dir.is_dir():
             continue
         from mybot.vision.matcher import find_image
@@ -438,7 +439,7 @@ def _check_chat_tab(
     Chat tab appears on the left side of screen when open.
     Uses image search for the chat tab indicator.
     """
-    chat_dir = Path("imgxml/other/ChatTab")
+    chat_dir = resolve_img_dir("imgxml/other/ChatTab")
     if not chat_dir.is_dir():
         return False
 

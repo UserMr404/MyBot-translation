@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import MID_OFFSET_Y, SIEGE_SHORT_NAMES
 from mybot.enums import Siege
 from mybot.log import set_debug_log
@@ -35,7 +36,7 @@ def get_army_siege(
     counts = [0] * Siege.COUNT
 
     if template_dir is None:
-        template_dir = Path("imgxml/ArmyOverview/SiegeMachines")
+        template_dir = resolve_img_dir("imgxml/ArmyOverview/SiegeMachines")
 
     if not template_dir.is_dir():
         return counts

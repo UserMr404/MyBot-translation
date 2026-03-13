@@ -30,6 +30,7 @@ from mybot.army.quick_train import quick_train
 from mybot.army.smart_wait import smart_wait_for_train
 from mybot.army.train_it import train_it
 from mybot.army.train_siege import train_siege
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import TROOP_SHORT_NAMES, SPELL_SHORT_NAMES
 from mybot.enums import Spell, Troop
 from mybot.log import set_debug_log, set_log
@@ -53,8 +54,8 @@ class TrainConfig:
     double_train: bool = False
 
     # Training template directories
-    troop_template_dir: Path = field(default_factory=lambda: Path("imgxml/Train/Troops"))
-    spell_template_dir: Path = field(default_factory=lambda: Path("imgxml/Train/Spells"))
+    troop_template_dir: Path = field(default_factory=lambda: resolve_img_dir("imgxml/Train/Troops"))
+    spell_template_dir: Path = field(default_factory=lambda: resolve_img_dir("imgxml/Train/Spells"))
 
 
 @dataclass

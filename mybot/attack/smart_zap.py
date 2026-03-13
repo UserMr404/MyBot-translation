@@ -19,6 +19,7 @@ import numpy as np
 
 from mybot.attack.attack_bar import AttackBar
 from mybot.attack.deploy import drop_troop
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.enums import ArmyIndex
 from mybot.log import set_debug_log, set_log
 
@@ -123,7 +124,7 @@ def _find_drills(
     Translated from drillSearch() in drillSearch.au3.
     """
     if template_dir is None:
-        template_dir = Path("imgxml/deadbase/Storages/Dark")
+        template_dir = resolve_img_dir("imgxml/deadbase/Storages/Dark")
 
     if not template_dir.is_dir():
         return []

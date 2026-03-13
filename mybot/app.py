@@ -25,6 +25,7 @@ from mybot.config.reader import read_config
 from mybot.enums import BotAction
 from mybot.log import get_logger, setup_logging
 from mybot.state import BotState
+from mybot.utils.paths import init_base_dir
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -65,6 +66,16 @@ class App:
         self.bot: Bot | None = None
         self.gui: object | None = None
         self._bot_thread: threading.Thread | None = None
+
+        # Initialize base directory for resource resolution (PyInstaller-safe)
+        base_dir = init_base_dir()
+
+        # Set image template directory and i18n language directory
+        from mybot.config import image_dirs
+        image_dirs.set_script_dir(base_dir)
+
+        from mybot import i18n
+        i18n.init(base_dir / "Languages")
 
         # Resolve profile
         self._profiles_dir = get_profiles_dir(args.profiles_dir)

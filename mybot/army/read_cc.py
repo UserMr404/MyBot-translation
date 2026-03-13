@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.constants import MID_OFFSET_Y
 from mybot.enums import Siege, Spell, Troop
 from mybot.log import set_debug_log
@@ -76,7 +77,7 @@ def get_cc_troops(
 
     # Detect CC troop types
     if template_dir is None:
-        template_dir = Path("imgxml/ArmyOverview/CCTroops")
+        template_dir = resolve_img_dir("imgxml/ArmyOverview/CCTroops")
 
     if template_dir.is_dir():
         from mybot.vision.matcher import find_multiple

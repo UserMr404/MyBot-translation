@@ -16,6 +16,7 @@ from typing import Callable
 
 import numpy as np
 
+from mybot.config.image_dirs import resolve as resolve_img_dir
 from mybot.enums import MatchMode
 from mybot.log import set_debug_log, set_log
 from mybot.search.resources import SearchFilter, SearchLoot, compare_resources, get_resources
@@ -36,8 +37,8 @@ class SearchConfig:
     th_template_dirs: list[Path] = field(default_factory=list)
 
     # Dead base detection
-    dead_base_dir: Path = field(default_factory=lambda: Path("imgxml/deadbase"))
-    collector_level_dir: Path = field(default_factory=lambda: Path("imgxml/deadbase/levels"))
+    dead_base_dir: Path = field(default_factory=lambda: resolve_img_dir("imgxml/deadbase"))
+    collector_level_dir: Path = field(default_factory=lambda: resolve_img_dir("imgxml/deadbase/levels"))
 
     # Search limits
     max_searches: int = 200
