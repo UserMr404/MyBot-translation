@@ -154,3 +154,8 @@ class BotState:
     direct_attack_running: bool = False
     idle_state: bool = False
     attack_now_pressed: bool = False
+
+    # Continuous attack mode — skip collections/training, loop attacks with delay
+    continuous_attack: bool = False
+    continuous_delay_min: int = 30   # seconds between attacks
+    continuous_delay_max: int = 180  # seconds between attacks

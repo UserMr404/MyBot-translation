@@ -145,9 +145,46 @@ class AttackOptionsSubTab(QWidget):
 
         layout.addWidget(timing_group)
 
+        # ── Continuous Attack Mode ─────────────────────────────────────
+        cont_group = QGroupBox("Continuous Attack Mode")
+        cont_layout = QFormLayout(cont_group)
+
+        self.chk_continuous = QCheckBox("Enable Continuous Attack")
+        self.chk_continuous.setToolTip(
+            "Skip collections, donations, and training — loop attacks with a random delay."
+        )
+        self.chk_continuous.toggled.connect(self._on_continuous_toggled)
+        cont_layout.addRow(self.chk_continuous)
+
+        self.spn_cont_delay_min = QSpinBox()
+        self.spn_cont_delay_min.setRange(5, 600)
+        self.spn_cont_delay_min.setValue(30)
+        self.spn_cont_delay_min.setSuffix(" sec")
+        cont_layout.addRow("Min Delay Between Attacks:", self.spn_cont_delay_min)
+
+        self.spn_cont_delay_max = QSpinBox()
+        self.spn_cont_delay_max.setRange(5, 600)
+        self.spn_cont_delay_max.setValue(180)
+        self.spn_cont_delay_max.setSuffix(" sec")
+        cont_layout.addRow("Max Delay Between Attacks:", self.spn_cont_delay_max)
+
+        self.lbl_cont_note = QLabel(
+            "Skips village collections, donations, and army training between attacks."
+        )
+        self.lbl_cont_note.setWordWrap(True)
+        cont_layout.addRow(self.lbl_cont_note)
+
+        layout.addWidget(cont_group)
+
         layout.addStretch()
         scroll.setWidget(content)
         outer.addWidget(scroll)
+
+    def _on_continuous_toggled(self, checked: bool) -> None:
+        """Sync continuous attack checkbox to BotState."""
+        self.state.continuous_attack = checked
+        self.spn_cont_delay_min.setEnabled(checked)
+        self.spn_cont_delay_max.setEnabled(checked)
 
     def _browse_csv(self, line_edit: QLineEdit) -> None:
         """Open file dialog to select a CSV attack script."""

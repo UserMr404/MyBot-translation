@@ -69,4 +69,7 @@ def read_config(config_path: Path, state: BotState) -> None:
     # Expanded in Phase 5
 
     # ── Attack / Search ──────────────────────────────────────────────────
+    state.continuous_attack = _read_bool(config, "attack", "ContinuousAttack")
+    state.continuous_delay_min = _read_int(config, "attack", "ContinuousDelayMin", 30)
+    state.continuous_delay_max = _read_int(config, "attack", "ContinuousDelayMax", 180)
     # Expanded in Phase 4-5

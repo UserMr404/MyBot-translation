@@ -181,6 +181,11 @@ class Bot:
         if self._is_stopped():
             return
 
+        # ── Continuous attack mode ─────────────────────────────────────
+        if self.state.continuous_attack and not search_only:
+            self._continuous_attack_iteration()
+            return
+
         # ── Check main screen ──────────────────────────────────────────
         self._check_main_screen()
         if self._is_stopped():
@@ -297,6 +302,34 @@ class Bot:
             self._attack_count += 1
         except ImportError:
             pass
+
+    # ── Continuous Attack ────────────────────────────────────────────────
+
+    def _continuous_attack_iteration(self) -> None:
+        """Single iteration for continuous attack mode.
+
+        Skips collections, donations, and training — just attacks with a
+        randomized delay between cycles.
+        """
+        self._check_main_screen()
+        if self._is_stopped():
+            return
+
+        self._check_obstacles()
+        if self._is_stopped():
+            return
+
+        self._attack_cycle()
+        if self._is_stopped():
+            return
+
+        # Random delay between attacks
+        delay = random.randint(
+            self.state.continuous_delay_min,
+            self.state.continuous_delay_max,
+        )
+        set_log(f"Continuous mode: waiting {delay}s before next attack")
+        bot_sleep(delay * 1000, self.state.stop_event)
 
     # ── Helpers ────────────────────────────────────────────────────────────
 

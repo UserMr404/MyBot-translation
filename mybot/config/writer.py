@@ -42,6 +42,13 @@ def save_config(config_path: Path, state: BotState) -> None:
     config.set("debug", "debugredarea", str(state.debug.red_area))
     config.set("debug", "debugattackcsv", str(state.debug.attack_csv))
 
+    # ── Attack ─────────────────────────────────────────────────────────
+    if not config.has_section("attack"):
+        config.add_section("attack")
+    config.set("attack", "ContinuousAttack", str(state.continuous_attack))
+    config.set("attack", "ContinuousDelayMin", str(state.continuous_delay_min))
+    config.set("attack", "ContinuousDelayMax", str(state.continuous_delay_max))
+
     # Write
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w", encoding="utf-8") as f:
