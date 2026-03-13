@@ -28,7 +28,7 @@ def check_android_reboot_condition(
     adb: AdbClient,
     pid: int = 0,
     reboot_interval_hours: float = 0,
-    last_reboot_time: float = 0,
+    last_reboot_time: float | None = None,
 ) -> str | None:
     """Check if the Android emulator needs a reboot.
 
@@ -61,7 +61,7 @@ def check_android_reboot_condition(
         return reason
 
     # Check scheduled reboot interval
-    if reboot_interval_hours > 0 and last_reboot_time > 0:
+    if reboot_interval_hours > 0 and last_reboot_time is not None:
         elapsed = time.monotonic() - last_reboot_time
         interval_sec = reboot_interval_hours * 3600
         if elapsed >= interval_sec:
@@ -75,7 +75,7 @@ def check_android_reboot_condition(
 def check_bot_restart_condition(
     adb: AdbClient,
     pid: int = 0,
-    bot_start_time: float = 0,
+    bot_start_time: float | None = None,
     restart_interval_hours: float = 0,
 ) -> str | None:
     """Check if the bot should restart.
@@ -92,7 +92,7 @@ def check_bot_restart_condition(
         Reason string if restart needed, None otherwise.
     """
     # Check scheduled restart
-    if restart_interval_hours > 0 and bot_start_time > 0:
+    if restart_interval_hours > 0 and bot_start_time is not None:
         elapsed = time.monotonic() - bot_start_time
         interval_sec = restart_interval_hours * 3600
         if elapsed >= interval_sec:
