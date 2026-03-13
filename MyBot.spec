@@ -11,10 +11,15 @@ import os
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_submodules
+
 block_cipher = None
 
 # Repository root (where this spec file lives)
 ROOT = Path(SPECPATH)
+
+# Ensure the repo root is on sys.path so PyInstaller can find the mybot package
+sys.path.insert(0, str(ROOT))
 
 # Data files to bundle (source, destination_in_bundle)
 datas = [
@@ -41,8 +46,7 @@ a = Analysis(
         'numpy',
         'psutil',
         'configparser',
-        'mybot',
-    ],
+    ] + collect_submodules('mybot'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
