@@ -10,6 +10,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from mybot.android.adb import _default_adb_path
 from mybot.android.base import BaseEmulator, EmulatorConfig, _read_registry
 from mybot.constants import COLOR_ERROR
 from mybot.log import set_debug_log, set_log
@@ -117,7 +118,7 @@ class Nox(BaseEmulator):
             instance = "Nox"
 
         install_path = self.get_install_path() or Path()
-        adb_path = self.get_adb_path() or Path("adb")
+        adb_path = self.get_adb_path() or _default_adb_path()
 
         # Port calculation: index 0 = 62001, index 1 = 62025, index n = 62025 + (n-1)
         idx = self._get_instance_index(instance)

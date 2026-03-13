@@ -8,14 +8,26 @@ from __future__ import annotations
 
 import subprocess
 import time
+import shutil
 from pathlib import Path
 
 from mybot.constants import COLOR_ERROR
 from mybot.log import set_debug_log, set_log
+from mybot.utils.paths import resource_path
 
 
 class AdbError(Exception):
     """Raised when an ADB command fails."""
+
+
+def _default_adb_path() -> Path:
+    """Resolve the default ADB path, checking bundled lib/ first."""
+    bundled = resource_path("lib/adb/adb.exe")
+    if bundled.exists():
+        return bundled
+    # Fall back to system PATH
+    system_adb = shutil.which("adb")
+    return Path(system_adb) if system_adb else Path("adb")
 
 
 class AdbClient:
@@ -30,7 +42,7 @@ class AdbClient:
     """
 
     def __init__(self, adb_path: Path | None = None, device: str = "") -> None:
-        self.adb_path = adb_path or Path("adb")
+        self.adb_path = adb_path or _default_adb_path()
         self.device = device
         self._error_count = 0
         self._max_errors = 10  # Trigger reboot after this many consecutive errors

@@ -9,6 +9,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from mybot.android.adb import _default_adb_path
 from mybot.android.base import BaseEmulator, EmulatorConfig, _read_registry
 from mybot.constants import COLOR_ERROR
 from mybot.log import set_debug_log, set_log
@@ -140,7 +141,7 @@ class BlueStacks5(BaseEmulator):
             instance = instances[0] if instances else "Nougat64"
 
         install_path = self.get_install_path() or Path()
-        adb_path = self.get_adb_path() or Path("adb")
+        adb_path = self.get_adb_path() or _default_adb_path()
         port = self._get_instance_port(instance)
 
         # Window title pattern: "BlueStacks App Player" or instance-specific
