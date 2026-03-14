@@ -170,8 +170,8 @@ class Bot:
         # Zoom out to ensure consistent screenshot coordinates
         from mybot.android.zoom import zoom_out
         if self._emu_manager and self._emu_manager.emulator and self._emu_manager.emulator.adb:
-            set_log("Zooming out...")
-            zoom_out(self._emu_manager.emulator.adb)
+            emu_name = self._emu_manager.emulator.name or "BlueStacks5"
+            zoom_out(self._emu_manager.emulator.adb, emulator=emu_name)
 
         # First check (one-time init)
         if self.state.first_start:

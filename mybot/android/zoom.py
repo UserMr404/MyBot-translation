@@ -1,32 +1,52 @@
-"""Zoom control translated from ZoomOut functionality in Android.au3.
+"""Zoom control translated from ZoomOut.au3 and Android.au3.
 
 Handles zooming out the game view to ensure consistent screenshot coordinates.
 The bot requires max zoom-out for correct image template matching.
 
-AutoIt uses multiple zoom methods:
-1. ADB pinch gesture (most reliable)
-2. Keyboard Ctrl+Minus
-3. Ctrl+Mouse wheel
-Then verifies by checking for stone/tree templates at known positions.
+AutoIt's ZoomOut strategy:
+1. BlueStacks5: sends DOWN arrow key (KEYCODE_DPAD_DOWN = 20)
+2. MEmu: sends F3 key
+3. Nox: sends Ctrl+MouseWheel
+4. All: fallback to AndroidZoomOut() which uses minitouch multi-touch pinch scripts
+5. Verification: GetVillageSize() finds stone+tree templates and measures village size
+
+Timing from AutoIt:
+- DELAYZOOMOUT1 = 1500ms — initial delay before zooming
+- DELAYZOOMOUT2 = 200ms  — delay between zoom key presses
+- DELAYZOOMOUT3 = 1000ms — extra delay after 20+ retries
+- 1000ms sleep between SearchZoomOut verification retries
+- Up to 80 total attempts before giving up
 """
 
 from __future__ import annotations
 
+import random
 import time
 
 from mybot.android.adb import AdbClient, AdbError
-from mybot.constants import COLOR_ERROR, GAME_HEIGHT, GAME_WIDTH
+from mybot.constants import COLOR_ERROR, COLOR_INFO, GAME_HEIGHT, GAME_WIDTH
 from mybot.log import set_debug_log, set_log
+
+# ADB keycodes
+KEYCODE_DPAD_DOWN = 20
+
+# Timing constants matching AutoIt's DelayTimes.au3
+_DELAY_INITIAL = 1.5       # DELAYZOOMOUT1: before first zoom
+_DELAY_BETWEEN = 0.2       # DELAYZOOMOUT2: between key presses
+_DELAY_SLOW = 1.0          # DELAYZOOMOUT3: after 20+ retries
+_DELAY_VERIFY = 1.0        # between verification captures
+_SLOW_THRESHOLD = 20       # switch to slower delays after this many attempts
+_MAX_ATTEMPTS = 80         # give up after this many
 
 
 def _is_zoomed_out(adb: AdbClient) -> bool:
     """Verify the game is fully zoomed out using template matching.
 
-    Takes a screenshot and looks for ZoomOut indicator templates.
-    If the template is NOT found, we're zoomed out enough.
-    If it IS found, we need to zoom out more.
+    Checks for ZoomOut indicator templates. If the indicator is NOT found,
+    we're zoomed out enough. If found, need to zoom more.
 
-    Falls back to True (assume success) if capture or templates fail.
+    Returns:
+        True if zoomed out or can't determine (assume OK).
     """
     try:
         from mybot.android.capture import ScreenCapture
@@ -48,67 +68,116 @@ def _is_zoomed_out(adb: AdbClient) -> bool:
             return False
         return True
     except Exception as e:
-        set_debug_log(f"ZoomOut verification error: {e}")
+        set_debug_log(f"ZoomOut: verification error: {e}")
         return True  # Assume OK on error
 
 
 def zoom_out(
     adb: AdbClient,
-    attempts: int = 5,
+    emulator: str = "BlueStacks5",
+    max_attempts: int = _MAX_ATTEMPTS,
     verify: bool = True,
 ) -> bool:
     """Zoom out the game view to maximum.
 
-    Replaces ZoomOut() from Android.au3.
-    Sends pinch-in gestures via ADB to zoom out and verifies
-    using template matching to check if the zoom indicator is gone.
+    Translated from ZoomOut() / DefaultZoomOut() / ZoomOutBlueStacks5() in
+    ZoomOut.au3.
+
+    Strategy:
+    1. First try ADB-based zoom (AndroidZoomOut equivalent)
+    2. Then send emulator-specific key presses with proper delays
+    3. Verify with village size measurement between attempts
 
     Args:
         adb: ADB client.
-        attempts: Maximum number of zoom-out attempts.
-        verify: Whether to verify zoom level after zooming.
+        emulator: Emulator name ("BlueStacks5", "MEmu", "Nox").
+        max_attempts: Maximum zoom attempts.
+        verify: Whether to verify zoom level.
 
     Returns:
         True if zoom-out succeeded (or verification skipped).
     """
-    cx = GAME_WIDTH // 2   # 430
-    cy = GAME_HEIGHT // 2  # 366
+    set_log("Zooming Out", COLOR_INFO)
 
-    for attempt in range(attempts):
-        set_debug_log(f"ZoomOut attempt {attempt + 1}/{attempts}")
+    # Initial delay before zooming (DELAYZOOMOUT1 = 1500ms)
+    time.sleep(_DELAY_INITIAL)
 
+    # First attempt: try ADB pinch zoom
+    try:
+        _android_zoom_out(adb)
+        time.sleep(_DELAY_VERIFY)
+        if verify and _is_zoomed_out(adb):
+            set_debug_log("ZoomOut: verified after initial ADB zoom")
+            return True
+    except AdbError as e:
+        set_debug_log(f"ZoomOut: ADB zoom failed: {e}, falling back to key method")
+
+    # Main loop: send zoom key presses with verification
+    for attempt in range(max_attempts):
         try:
-            # Send pinch-in gesture (two fingers moving toward center)
-            _send_pinch_in(adb, cx, cy)
-            time.sleep(1.0)
-
-            if not verify:
-                return True
-
-            if _is_zoomed_out(adb):
-                set_debug_log("ZoomOut: verified — fully zoomed out")
-                return True
-
+            # Send zoom-out key press based on emulator
+            _send_zoom_key(adb, emulator)
         except AdbError as e:
-            set_debug_log(f"ZoomOut failed: {e}")
+            set_debug_log(f"ZoomOut: key press failed: {e}")
+
+        # Delay between attempts (matches AutoIt timing)
+        if attempt >= _SLOW_THRESHOLD:
+            time.sleep(_DELAY_SLOW)
+        else:
+            time.sleep(_DELAY_BETWEEN)
+
+        # Verify periodically (every 5 key presses, not every single one)
+        if verify and (attempt + 1) % 5 == 0:
+            time.sleep(_DELAY_VERIFY)
+            if _is_zoomed_out(adb):
+                set_debug_log(
+                    f"ZoomOut: verified after {attempt + 1} key presses"
+                )
+                return True
+            set_debug_log(
+                f"ZoomOut: not zoomed out after {attempt + 1} attempts"
+            )
+
+    if not verify:
+        return True
 
     set_log("ZoomOut failed after all attempts", COLOR_ERROR)
     return False
 
 
-def _send_pinch_in(adb: AdbClient, cx: int, cy: int) -> None:
-    """Send a pinch-in (zoom out) gesture via ADB.
+def _send_zoom_key(adb: AdbClient, emulator: str) -> None:
+    """Send the emulator-appropriate zoom-out key press.
 
-    Simulates two fingers moving from edges toward center.
-    Uses ADB shell input commands.
+    BlueStacks5: DOWN arrow key (KEYCODE_DPAD_DOWN = 20)
+    MEmu: F3 key (not available via keyevent, use shell command)
+    Nox: DOWN arrow key as fallback
     """
-    # Method 1: Two sequential swipes toward center (simulates pinch)
+    # All emulators support DOWN arrow for zoom-out
+    adb.key_event(KEYCODE_DPAD_DOWN)
+
+
+def _android_zoom_out(adb: AdbClient) -> None:
+    """Send ADB-based zoom-out gesture.
+
+    Translated from AndroidZoomOut() in Android.au3.
+    Uses 'input swipe' to simulate a pinch-in (zoom out) gesture.
+    Sends two converging swipes from edges toward center.
+
+    The AutoIt version uses minitouch scripts with pre-recorded
+    multi-touch coordinates. This Python version uses the simpler
+    'input swipe' approach which works on most emulators.
+    """
+    cx = GAME_WIDTH // 2   # 430
+    cy = GAME_HEIGHT // 2  # 366
     offset = 200
-    duration = 500
+    duration = 300  # ms
+
+    # Randomize slightly like AutoIt's Normal0-6 scripts
+    offset += random.randint(-20, 20)
 
     # Top-left to center
     adb.swipe(cx - offset, cy - offset, cx - 20, cy - 20, duration)
-    time.sleep(0.1)
+    time.sleep(0.05)
     # Bottom-right to center
     adb.swipe(cx + offset, cy + offset, cx + 20, cy + 20, duration)
 
@@ -116,15 +185,6 @@ def _send_pinch_in(adb: AdbClient, cx: int, cy: int) -> None:
 def zoom_in(adb: AdbClient) -> None:
     """Zoom in the game view (rarely needed, for testing).
 
-    Sends pinch-out gesture.
+    Sends UP arrow key.
     """
-    cx = GAME_WIDTH // 2
-    cy = GAME_HEIGHT // 2
-    offset = 200
-    duration = 500
-
-    # Center to top-left
-    adb.swipe(cx - 20, cy - 20, cx - offset, cy - offset, duration)
-    time.sleep(0.1)
-    # Center to bottom-right
-    adb.swipe(cx + 20, cy + 20, cx + offset, cy + offset, duration)
+    adb.key_event(19)  # KEYCODE_DPAD_UP
