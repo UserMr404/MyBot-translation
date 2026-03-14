@@ -19,6 +19,39 @@ from mybot.constants import COLOR_ERROR, GAME_HEIGHT, GAME_WIDTH
 from mybot.log import set_debug_log, set_log
 
 
+def _is_zoomed_out(adb: AdbClient) -> bool:
+    """Verify the game is fully zoomed out using template matching.
+
+    Takes a screenshot and looks for ZoomOut indicator templates.
+    If the template is NOT found, we're zoomed out enough.
+    If it IS found, we need to zoom out more.
+
+    Falls back to True (assume success) if capture or templates fail.
+    """
+    try:
+        from mybot.android.capture import ScreenCapture
+        from mybot.config.image_dirs import resolve as resolve_img_dir
+        from mybot.vision.matcher import find_multiple
+
+        capture = ScreenCapture(adb=adb)
+        image = capture.capture_full()
+        if image is None:
+            return True  # Can't verify, assume OK
+
+        zoom_dir = resolve_img_dir("imgxml/other/ZoomOut")
+        if not zoom_dir.is_dir():
+            return True  # No templates, assume OK
+
+        result = find_multiple(image, zoom_dir, confidence=0.80, max_results=1)
+        if result.found:
+            set_debug_log("ZoomOut: zoom indicator still visible, need more zoom")
+            return False
+        return True
+    except Exception as e:
+        set_debug_log(f"ZoomOut verification error: {e}")
+        return True  # Assume OK on error
+
+
 def zoom_out(
     adb: AdbClient,
     attempts: int = 5,
@@ -27,7 +60,8 @@ def zoom_out(
     """Zoom out the game view to maximum.
 
     Replaces ZoomOut() from Android.au3.
-    Sends pinch-in gestures via ADB to zoom out.
+    Sends pinch-in gestures via ADB to zoom out and verifies
+    using template matching to check if the zoom indicator is gone.
 
     Args:
         adb: ADB client.
@@ -45,17 +79,15 @@ def zoom_out(
 
         try:
             # Send pinch-in gesture (two fingers moving toward center)
-            # This zooms out in the game
             _send_pinch_in(adb, cx, cy)
             time.sleep(1.0)
 
             if not verify:
                 return True
 
-            # Verification would use image template matching (Phase 3)
-            # For now, assume success after gesture
-            set_debug_log("ZoomOut: verification deferred to vision system")
-            return True
+            if _is_zoomed_out(adb):
+                set_debug_log("ZoomOut: verified — fully zoomed out")
+                return True
 
         except AdbError as e:
             set_debug_log(f"ZoomOut failed: {e}")

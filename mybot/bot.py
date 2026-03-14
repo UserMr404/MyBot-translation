@@ -12,6 +12,10 @@ from __future__ import annotations
 import random
 import time
 
+import numpy as np
+
+from mybot.android.capture import ScreenCapture
+from mybot.android.input import click as adb_click
 from mybot.android.manager import EmulatorManager
 from mybot.constants import COLOR_ERROR, COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING
 from mybot.enums import BotAction
@@ -32,6 +36,7 @@ class Bot:
         self._attack_count = 0
         self._collect_count = 0
         self._emu_manager: EmulatorManager | None = None
+        self._capture: ScreenCapture | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -124,8 +129,12 @@ class Bot:
 
         set_log("Android emulator opened successfully")
 
-        # Fire emulator-specific bot start event (e.g. hide system bar)
+        # Create screen capture instance for vision system
         emulator = self._emu_manager.emulator
+        if emulator is not None and emulator.adb is not None:
+            self._capture = ScreenCapture(adb=emulator.adb)
+
+        # Fire emulator-specific bot start event (e.g. hide system bar)
         if emulator is not None:
             emulator.on_bot_start()
 
@@ -152,11 +161,17 @@ class Bot:
         if self._is_stopped():
             return False
 
-        # Check main screen (not yet implemented — needs vision system)
-        set_log("Checking main screen (stub — vision not yet translated)")
+        # Wait for main screen to load after CoC launch
+        from mybot.game.main_screen import wait_main_screen
+        set_log("Waiting for main screen...")
+        if not wait_main_screen(self._screenshot, self._click):
+            set_log("Main screen not found during initiation", COLOR_WARNING)
 
-        # Zoom out (not yet implemented — needs ADB touch)
-        set_log("Zoom out (stub — not yet translated)")
+        # Zoom out to ensure consistent screenshot coordinates
+        from mybot.android.zoom import zoom_out
+        if self._emu_manager and self._emu_manager.emulator and self._emu_manager.emulator.adb:
+            set_log("Zooming out...")
+            zoom_out(self._emu_manager.emulator.adb)
 
         # First check (one-time init)
         if self.state.first_start:
@@ -168,12 +183,37 @@ class Bot:
     def first_check(self) -> None:
         """One-time initialization (translated from FirstCheck in MyBot.run.au3).
 
-        Checks Lab, Heroes, Buildings, Achievements on first run.
+        Detects Town Hall level via image search, reads initial village
+        status, and updates bot state.
         """
         set_log("Running first-time checks")
 
-        # Check Town Hall level, lab, heroes, etc.
-        # These are stubs — full implementation uses vision/OCR
+        image = self._screenshot()
+        if image is not None:
+            # Detect Town Hall level
+            from mybot.config.image_dirs import resolve as resolve_img_dir
+            from mybot.vision.townhall import find_town_hall
+
+            th_dirs = [
+                resolve_img_dir("imgxml/Buildings/Townhall"),
+                resolve_img_dir("imgxml/Buildings/Townhall2"),
+            ]
+            # Filter to only directories that actually exist
+            th_dirs = [d for d in th_dirs if d.is_dir()]
+
+            if th_dirs:
+                th_result = find_town_hall(image, th_dirs)
+                if th_result.found:
+                    self.state.village.town_hall_level = th_result.level
+                    set_log(f"Town Hall level detected: {th_result.level}", COLOR_SUCCESS)
+                else:
+                    set_log("Town Hall not detected on first check", COLOR_WARNING)
+            else:
+                self.logger.debug("No TH template directories found, skipping detection")
+
+            # Read initial village report
+            self._village_report()
+
         self.state.first_run = 0
 
     # ── Main Cycle ─────────────────────────────────────────────────────────
@@ -249,32 +289,70 @@ class Bot:
         bot_sleep(5000, self.state.stop_event)
 
     def _check_main_screen(self) -> None:
-        """Verify bot is on main village screen."""
-        try:
-            from mybot.game.main_screen import is_main_screen
-        except ImportError:
-            self.logger.debug("check_main_screen not yet implemented")
+        """Verify bot is on main village screen.
+
+        Takes a screenshot and checks if we're on the main screen.
+        If not, runs the full check_main_screen recovery loop which
+        handles obstacles and retries.
+        """
+        from mybot.game.main_screen import check_main_screen, is_main_screen
+
+        image = self._screenshot()
+        if image is None:
+            return
+
+        if not is_main_screen(image):
+            set_log("Not on main screen, attempting recovery...")
+            if not check_main_screen(self._screenshot, self._click):
+                set_log("Main screen recovery failed", COLOR_WARNING)
+                self.state.restart_requested = True
 
     def _check_obstacles(self) -> None:
-        """Check for and dismiss error dialogs."""
-        try:
-            from mybot.game.obstacles import check_obstacles
-        except ImportError:
-            self.logger.debug("check_obstacles not yet implemented")
+        """Check for and dismiss error dialogs/popups.
+
+        Takes a screenshot and runs the full obstacle detection pipeline.
+        Logs any obstacles found and handled.
+        """
+        from mybot.game.obstacles import check_obstacles
+
+        image = self._screenshot()
+        if image is None:
+            return
+
+        result = check_obstacles(image, self._click)
+        if result.found:
+            set_log(f"Obstacle handled: {result.action_taken}")
+            if not result.minor:
+                # Non-minor obstacles may need a brief pause for the game to recover
+                bot_sleep(2000, self.state.stop_event)
 
     def _village_report(self) -> None:
-        """Read and display village status."""
-        try:
-            from mybot.village.report import read_village_report
-        except ImportError:
-            self.logger.debug("village_report not yet implemented")
+        """Read and display village status via OCR.
+
+        Takes a screenshot, reads resources/builders/trophies from known
+        screen positions, and updates bot state.
+        """
+        from mybot.village.report import read_village_report, update_bot_state
+
+        image = self._screenshot()
+        if image is None:
+            return
+
+        report = read_village_report(image)
+        update_bot_state(report, self.state)
 
     def _do_collections(self) -> None:
         """Perform resource collections in randomized order.
 
         Translated from the randomized collection block in runBot().
+        Uses template matching to find collector buildings with ready
+        resources and clicks each one to collect.
         """
-        self.logger.debug("Collections not yet implemented, skipping")
+        from mybot.village.collect import collect_resources
+
+        result = collect_resources(self._screenshot, self._click)
+        if result.total_clicks > 0:
+            set_log(f"Collected from {result.total_clicks} buildings")
 
     def _train_and_donate(self) -> None:
         """Training and donation cycle.
@@ -289,6 +367,31 @@ class Bot:
         Translated from AttackCycle(False) call in runBot().
         """
         self.logger.debug("Attack cycle not yet implemented, skipping")
+
+    # ── Vision Helpers ────────────────────────────────────────────────────
+
+    def _screenshot(self) -> np.ndarray | None:
+        """Capture a full screenshot from the emulator.
+
+        Used as capture_func callback for vision/game modules.
+        """
+        if self._capture is None:
+            return None
+        return self._capture.capture_full()
+
+    def _click(self, x: int, y: int) -> None:
+        """Click at position on the emulator screen.
+
+        Used as click_func callback for vision/game modules.
+        Adds small random noise (±2px) to avoid pattern detection.
+        """
+        if self._emu_manager is None or self._emu_manager.emulator is None:
+            return
+        adb = self._emu_manager.emulator.adb
+        if adb is None:
+            return
+        noise = random.randint(-2, 2)
+        adb_click(x + noise, y + noise, adb=adb, noise=0)
 
     # ── Helpers ────────────────────────────────────────────────────────────
 
