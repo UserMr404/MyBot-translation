@@ -11,7 +11,7 @@ from pathlib import Path
 
 from mybot.android.adb import _default_adb_path
 from mybot.android.base import BaseEmulator, EmulatorConfig, _read_registry
-from mybot.constants import COLOR_ERROR
+from mybot.constants import COLOR_ERROR, COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING
 from mybot.log import set_debug_log, set_log
 
 # BlueStacks 5 constants (from AndroidBluestacks5.au3)
@@ -167,6 +167,109 @@ class BlueStacks5(BaseEmulator):
             second_process=_BS5_FRONTEND,
             shortcut_name="BlueStacks 5",
         )
+
+    def _read_conf_lines(self) -> list[str]:
+        """Read bluestacks.conf lines, returning empty list on failure."""
+        data_dir = self._get_data_dir()
+        if not data_dir:
+            return []
+        conf_file = data_dir / "bluestacks.conf"
+        if not conf_file.exists():
+            return []
+        try:
+            return conf_file.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return []
+
+    def _write_conf_lines(self, lines: list[str]) -> bool:
+        """Write bluestacks.conf lines back to disk."""
+        data_dir = self._get_data_dir()
+        if not data_dir:
+            return False
+        conf_file = data_dir / "bluestacks.conf"
+        try:
+            conf_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return True
+        except OSError as e:
+            set_log(f"Failed to write bluestacks.conf: {e}", COLOR_ERROR)
+            return False
+
+    def set_screen_config(self) -> bool:
+        """Write required settings to bluestacks.conf.
+
+        Translated from SetScreenBlueStacks5() in AndroidBluestacks5.au3.
+        Sets resolution to 860x732, DPI to 160, disables sidebar and FPS,
+        and suppresses the Google login popup.
+        """
+        lines = self._read_conf_lines()
+        if not lines:
+            set_log("Cannot read bluestacks.conf for configuration", COLOR_WARNING)
+            return False
+
+        inst = self.config.instance
+        # Keys to search for and their required values
+        required: dict[str, str] = {
+            f"bst.instance.{inst}.fb_width": f'bst.instance.{inst}.fb_width="860"',
+            f"bst.instance.{inst}.fb_height": f'bst.instance.{inst}.fb_height="732"',
+            f"bst.instance.{inst}.dpi": f'bst.instance.{inst}.dpi="160"',
+            f"bst.instance.{inst}.gl_win_height": f'bst.instance.{inst}.gl_win_height="732"',
+            f"bst.instance.{inst}.show_sidebar": f'bst.instance.{inst}.show_sidebar="0"',
+            f"bst.instance.{inst}.enable_fps_display": f'bst.instance.{inst}.enable_fps_display="1"',
+            f"bst.instance.{inst}.google_login_popup_shown": f'bst.instance.{inst}.google_login_popup_shown="0"',
+        }
+
+        found_keys: set[str] = set()
+        for i, line in enumerate(lines):
+            for key, value in required.items():
+                if key in line:
+                    lines[i] = value
+                    found_keys.add(key)
+
+        # Append any keys that weren't already in the config
+        for key, value in required.items():
+            if key not in found_keys:
+                lines.append(value)
+
+        if self._write_conf_lines(lines):
+            set_debug_log("BlueStacks config updated (sidebar disabled, resolution set)")
+            return True
+        return False
+
+    def on_bot_start(self) -> None:
+        """Event called when the bot starts.
+
+        Translated from BlueStacks5BotStartEvent() in AndroidBluestacks5.au3.
+        Hides the Android system/navigation bar via ADB to maximize game area.
+        """
+        try:
+            # Android Pie+ uses immersive mode policy
+            result = self.adb.shell(
+                "settings put global policy_control immersive.status=*"
+            )
+            set_debug_log(f"Closed BlueStacks system bar: {result}")
+        except Exception as e:
+            set_debug_log(f"Failed to close system bar (immersive), trying legacy: {e}")
+            try:
+                result = self.adb.shell(
+                    "service call activity 42 s16 com.android.systemui"
+                )
+                set_debug_log(f"Closed BlueStacks system bar (legacy): {result}")
+            except Exception as e2:
+                set_log(f"Cannot close BlueStacks system bar: {e2}", COLOR_WARNING)
+
+    def on_bot_stop(self) -> None:
+        """Event called when the bot stops.
+
+        Translated from BlueStacks5BotStopEvent() in AndroidBluestacks5.au3.
+        Restores the Android system bar.
+        """
+        try:
+            result = self.adb.shell(
+                "am startservice -n com.android.systemui/.SystemUIService"
+            )
+            set_debug_log(f"Restored BlueStacks system bar: {result}")
+        except Exception as e:
+            set_debug_log(f"Failed to restore system bar: {e}")
 
     def _launch_process(self) -> subprocess.Popen | None:  # type: ignore[type-arg]
         """Launch BlueStacks instance."""

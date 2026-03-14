@@ -154,6 +154,33 @@ class BaseEmulator(ABC):
             Process ID, or 0 if not found.
         """
 
+    # ── Bot Event Hooks ──────────────────────────────────────────────────
+
+    def set_screen_config(self) -> bool:
+        """Apply emulator-specific config file settings before launch.
+
+        Override in subclasses to write config files (e.g. BlueStacks
+        writes show_sidebar=0 to bluestacks.conf).
+
+        Returns:
+            True if config was applied (or not needed).
+        """
+        return True
+
+    def on_bot_start(self) -> None:
+        """Called when the bot starts running.
+
+        Override in subclasses for emulator-specific setup (e.g. hiding
+        the system bar in BlueStacks).
+        """
+
+    def on_bot_stop(self) -> None:
+        """Called when the bot stops running.
+
+        Override in subclasses for emulator-specific cleanup (e.g.
+        restoring the system bar in BlueStacks).
+        """
+
     # ── Common Methods ───────────────────────────────────────────────────
 
     def initialize(self, instance: str = "") -> bool:
@@ -188,6 +215,9 @@ class BaseEmulator(ABC):
             True if emulator opened and ADB connected.
         """
         set_log(f"Opening {self.name}...")
+
+        # Apply emulator-specific config (e.g. disable sidebar) before launch
+        self.set_screen_config()
 
         # Check if already running
         hwnd = self._find_window()

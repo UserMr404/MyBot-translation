@@ -70,6 +70,9 @@ class Bot:
         self.state.action = BotAction.STOP
 
         if self._emu_manager is not None:
+            # Fire emulator-specific bot stop event (e.g. restore system bar)
+            if self._emu_manager.emulator is not None:
+                self._emu_manager.emulator.on_bot_stop()
             self._emu_manager.close()
             self._emu_manager = None
 
@@ -119,6 +122,11 @@ class Bot:
             return False
 
         set_log("Android emulator opened successfully")
+
+        # Fire emulator-specific bot start event (e.g. hide system bar)
+        emulator = self._emu_manager.emulator
+        if emulator is not None:
+            emulator.on_bot_start()
 
         # Launch Clash of Clans (like _RestartAndroidCoC in Android.au3)
         from mybot.android.app import start_coc
