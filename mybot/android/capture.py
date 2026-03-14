@@ -322,13 +322,13 @@ def get_pixel_color(image: np.ndarray, x: int, y: int) -> int:
         y: Y coordinate.
 
     Returns:
-        Color as 0xBBGGRR integer (AutoIt COLORREF format).
+        Color as 0xRRGGBB integer (standard hex color format).
     """
     h, w = image.shape[:2]
     if x < 0 or x >= w or y < 0 or y >= h:
         return 0
     b, g, r = image[y, x, :3]
-    return (int(b) << 16) | (int(g) << 8) | int(r)
+    return (int(r) << 16) | (int(g) << 8) | int(b)
 
 
 def check_pixel(
@@ -346,7 +346,7 @@ def check_pixel(
         image: BGR numpy array.
         x: X coordinate.
         y: Y coordinate.
-        color: Expected color (0xBBGGRR).
+        color: Expected color (0xRRGGBB).
         tolerance: Color distance tolerance per channel.
 
     Returns:
@@ -356,7 +356,7 @@ def check_pixel(
     if tolerance == 0:
         return actual == color
 
-    # Compare per channel
+    # Compare per channel (works regardless of byte order as long as both match)
     for shift in (0, 8, 16):
         ac = (actual >> shift) & 0xFF
         ec = (color >> shift) & 0xFF
@@ -382,7 +382,7 @@ def pixel_search(
         image: BGR numpy array.
         x1, y1: Top-left of search region.
         x2, y2: Bottom-right of search region.
-        color: Color to find (0xBBGGRR).
+        color: Color to find (0xRRGGBB).
         tolerance: Color distance tolerance.
 
     Returns:
@@ -394,10 +394,10 @@ def pixel_search(
     x2 = min(w, x2)
     y2 = min(h, y2)
 
-    # Extract target BGR
-    tb = (color >> 16) & 0xFF
+    # Extract target RGB from 0xRRGGBB, map to BGR image channels
+    tr = (color >> 16) & 0xFF
     tg = (color >> 8) & 0xFF
-    tr = color & 0xFF
+    tb = color & 0xFF
 
     region = image[y1:y2, x1:x2]
 
@@ -443,9 +443,10 @@ def multi_pixel_search(
     x2 = min(w, x2)
     y2 = min(h, y2)
 
-    tb = (color >> 16) & 0xFF
+    # Extract target RGB from 0xRRGGBB, map to BGR image channels
+    tr = (color >> 16) & 0xFF
     tg = (color >> 8) & 0xFF
-    tr = color & 0xFF
+    tb = color & 0xFF
 
     region = image[y1:y2, x1:x2]
 

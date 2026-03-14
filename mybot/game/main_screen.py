@@ -11,6 +11,7 @@ Source files:
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -35,7 +36,7 @@ def _check_pixel_tuple(
 
     Args:
         image: BGR screenshot.
-        pixel: (x, y, expected_color_0xBBGGRR, tolerance).
+        pixel: (x, y, expected_color_0xRRGGBB, tolerance).
 
     Returns:
         True if the pixel matches within tolerance.
@@ -67,15 +68,13 @@ def is_main_screen(
 
     if not _check_pixel_tuple(image, pixel):
         # Log the actual pixel color for debugging when the check fails
+        from mybot.vision.pixel import get_pixel_color
         x, y, expected, tol = pixel
-        if image is not None and 0 <= y < image.shape[0] and 0 <= x < image.shape[1]:
-            b, g, r = image[y, x][:3]
-            actual_hex = f"0x{r:02X}{g:02X}{b:02X}"
-            expected_hex = f"0x{expected:06X}"
-            set_debug_log(
-                f"Main screen pixel mismatch at ({x},{y}): "
-                f"expected {expected_hex} (tol={tol}), got {actual_hex}"
-            )
+        actual = get_pixel_color(image, x, y)
+        set_debug_log(
+            f"Main screen pixel mismatch at ({x},{y}): "
+            f"expected 0x{expected:06X} (tol={tol}), got 0x{actual:06X}"
+        )
         return False
 
     # Additional verification: check for network reconnecting overlay
@@ -114,6 +113,7 @@ def check_main_screen(
     max_retries: int = 24,
     android_restart_threshold: int = 20,
     delay: float = 2.0,
+    stop_event: threading.Event | None = None,
 ) -> bool:
     """Verify we're on the main screen, retrying with obstacle checks.
 
@@ -127,16 +127,24 @@ def check_main_screen(
         max_retries: Maximum retry attempts (default 24).
         android_restart_threshold: After this many failures, restart Android.
         delay: Seconds between retry attempts.
+        stop_event: Optional threading event to interrupt waiting (for stop button).
 
     Returns:
-        True if main screen confirmed, False if recovery failed.
+        True if main screen confirmed, False if recovery failed or stopped.
     """
     from mybot.game.obstacles import check_obstacles
 
     for attempt in range(max_retries):
+        if stop_event and stop_event.is_set():
+            set_log("Main screen check interrupted by stop")
+            return False
+
         image = capture_func()
         if image is None:
-            time.sleep(delay)
+            if stop_event:
+                stop_event.wait(timeout=delay)
+            else:
+                time.sleep(delay)
             continue
 
         if is_main_screen(image, builder_base=builder_base):
@@ -154,7 +162,10 @@ def check_main_screen(
         if not obstacle_cleared:
             set_debug_log(f"Main screen check {attempt + 1}/{max_retries}: not found")
 
-        time.sleep(delay)
+        if stop_event:
+            stop_event.wait(timeout=delay)
+        else:
+            time.sleep(delay)
 
     set_log("Main screen not found after all retries, restart required")
     return False
@@ -166,6 +177,7 @@ def wait_main_screen(
     builder_base: bool = False,
     max_wait: float = 210.0,
     check_interval: float = 2.0,
+    stop_event: threading.Event | None = None,
 ) -> bool:
     """Wait for the main screen to load.
 
@@ -178,6 +190,7 @@ def wait_main_screen(
         builder_base: Wait for builder base screen.
         max_wait: Maximum total wait time in seconds.
         check_interval: Seconds between checks.
+        stop_event: Optional threading event to interrupt waiting (for stop button).
 
     Returns:
         True if main screen appeared within timeout.
@@ -189,6 +202,10 @@ def wait_main_screen(
     last_progress_log = 0.0
 
     while time.time() - start < max_wait:
+        if stop_event and stop_event.is_set():
+            set_log("Main screen wait interrupted by stop")
+            return False
+
         attempts += 1
         image = capture_func()
 
@@ -211,7 +228,10 @@ def wait_main_screen(
             )
             last_progress_log = elapsed
 
-        time.sleep(check_interval)
+        if stop_event:
+            stop_event.wait(timeout=check_interval)
+        else:
+            time.sleep(check_interval)
 
     elapsed = time.time() - start
     set_log(f"Main screen not found after {elapsed:.1f}s ({attempts} checks)")
@@ -315,9 +335,9 @@ def is_main_grayed(image: np.ndarray) -> bool:
         if color is None:
             continue
         # Gray means R, G, B are close together and darkened
-        r = color & 0xFF
+        r = (color >> 16) & 0xFF
         g = (color >> 8) & 0xFF
-        b = (color >> 16) & 0xFF
+        b = color & 0xFF
         # Check if desaturated (channels within 30 of each other) and dim
         spread = max(r, g, b) - min(r, g, b)
         avg = (r + g + b) // 3
@@ -350,9 +370,9 @@ def is_builder_base_grayed(image: np.ndarray) -> bool:
         color = get_pixel_color(image, x, y)
         if color is None:
             continue
-        r = color & 0xFF
+        r = (color >> 16) & 0xFF
         g = (color >> 8) & 0xFF
-        b = (color >> 16) & 0xFF
+        b = color & 0xFF
         spread = max(r, g, b) - min(r, g, b)
         avg = (r + g + b) // 3
         if spread < 30 and 40 < avg < 160:

@@ -164,7 +164,7 @@ class Bot:
         # Wait for main screen to load after CoC launch
         from mybot.game.main_screen import wait_main_screen
         set_log("Waiting for main screen...")
-        if not wait_main_screen(self._screenshot, self._click):
+        if not wait_main_screen(self._screenshot, self._click, stop_event=self.state.stop_event):
             set_log("Main screen not found during initiation", COLOR_WARNING)
 
         # Zoom out to ensure consistent screenshot coordinates
@@ -303,7 +303,7 @@ class Bot:
 
         if not is_main_screen(image):
             set_log("Not on main screen, attempting recovery...")
-            if not check_main_screen(self._screenshot, self._click):
+            if not check_main_screen(self._screenshot, self._click, stop_event=self.state.stop_event):
                 set_log("Main screen recovery failed", COLOR_WARNING)
                 self.state.restart_requested = True
 

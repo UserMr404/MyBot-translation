@@ -104,10 +104,10 @@ def _parse_color(color: int | str) -> tuple[int, int, int]:
             return r, g, b
         return 0, 0, 0
 
-    # Integer 0xBBGGRR format
-    r = color & 0xFF
+    # Integer 0xRRGGBB format
+    r = (color >> 16) & 0xFF
     g = (color >> 8) & 0xFF
-    b = (color >> 16) & 0xFF
+    b = color & 0xFF
     return r, g, b
 
 
