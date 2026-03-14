@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot
 from PyQt6.QtGui import QColor, QTextCursor
 from PyQt6.QtWidgets import QTextEdit, QVBoxLayout, QWidget
 
@@ -125,12 +125,21 @@ class LogHandler(logging.Handler):
         self.log_widget = log_widget
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Emit a log record to the widget."""
+        """Emit a log record to the widget.
+
+        Uses QMetaObject.invokeMethod to safely marshal the call to the
+        GUI thread when emitting from the bot worker thread.
+        """
         try:
             msg = self.format(record) if self.formatter else record.getMessage()
             level = record.levelname
-            # Use QMetaObject.invokeMethod for thread safety
-            self.log_widget.append_message(msg, level)
+            QMetaObject.invokeMethod(
+                self.log_widget,
+                "append_message",
+                Qt.ConnectionType.QueuedConnection,
+                Q_ARG(str, msg),
+                Q_ARG(str, level),
+            )
         except Exception:
             self.handleError(record)
 

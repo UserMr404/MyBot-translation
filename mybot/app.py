@@ -123,6 +123,10 @@ class App:
             from mybot.gui.main_window import MainWindow
             self.gui = MainWindow(self.state, self.bot)
             self.gui.set_app(self)
+            # Route log messages to the GUI log widget
+            from mybot.gui.log_widget import LogHandler
+            log_handler = LogHandler(self.gui.log_widget)
+            self.logger.addHandler(log_handler)
         except ImportError:
             self.logger.warning("PyQt6 not available — running headless")
             self.state.gui_mode = 0
