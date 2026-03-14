@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from PyQt6.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot
+from PyQt6.QtCore import QObject, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QTextCursor
 from PyQt6.QtWidgets import QTextEdit, QVBoxLayout, QWidget
 
@@ -114,32 +114,35 @@ class LogWidget(QWidget):
         return self.text_edit.document().blockCount()
 
 
+class _LogBridge(QObject):
+    """Signal bridge for thread-safe log routing.
+
+    QMetaObject.invokeMethod with Q_ARG is unreliable in PyQt6 for
+    Python-defined slots. Using a signal is the idiomatic and reliable
+    approach for cross-thread GUI updates.
+    """
+
+    message = pyqtSignal(str, str)
+
+
 class LogHandler(logging.Handler):
     """Logging handler that routes messages to a LogWidget.
 
-    Thread-safe: uses Qt signal/slot mechanism for cross-thread updates.
+    Thread-safe: uses a QObject signal bridge so that emit() from any
+    thread safely queues the message to the GUI thread's event loop.
     """
 
     def __init__(self, log_widget: LogWidget) -> None:
         super().__init__()
-        self.log_widget = log_widget
+        self._bridge = _LogBridge()
+        self._bridge.message.connect(log_widget.append_message)
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Emit a log record to the widget.
-
-        Uses QMetaObject.invokeMethod to safely marshal the call to the
-        GUI thread when emitting from the bot worker thread.
-        """
+        """Emit a log record to the widget via the signal bridge."""
         try:
             msg = self.format(record) if self.formatter else record.getMessage()
             level = record.levelname
-            QMetaObject.invokeMethod(
-                self.log_widget,
-                "append_message",
-                Qt.ConnectionType.QueuedConnection,
-                Q_ARG(str, msg),
-                Q_ARG(str, level),
-            )
+            self._bridge.message.emit(msg, level)
         except Exception:
             self.handleError(record)
 

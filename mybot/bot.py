@@ -13,6 +13,7 @@ import random
 import time
 
 from mybot.android.manager import EmulatorManager
+from mybot.constants import COLOR_ERROR, COLOR_INFO, COLOR_SUCCESS, COLOR_WARNING
 from mybot.enums import BotAction
 from mybot.log import get_logger, set_log
 from mybot.state import BotState
@@ -108,17 +109,17 @@ class Bot:
         if emulator_name:
             set_log(f"Selecting emulator: {emulator_name}")
             if not self._emu_manager.select(emulator_name, instance):
-                set_log(f"Failed to initialize {emulator_name}", "ERROR")
+                set_log(f"Failed to initialize {emulator_name}", COLOR_ERROR)
                 return False
         else:
             set_log("No emulator configured — auto-detecting")
             if not self._emu_manager.auto_detect():
-                set_log("No supported Android emulator found", "ERROR")
+                set_log("No supported Android emulator found", COLOR_ERROR)
                 return False
 
         set_log("Launching emulator...")
         if not self._emu_manager.open():
-            set_log("Failed to open Android emulator", "ERROR")
+            set_log("Failed to open Android emulator", COLOR_ERROR)
             return False
 
         set_log("Android emulator opened successfully")
@@ -133,7 +134,7 @@ class Bot:
         emulator = self._emu_manager.emulator
         if emulator is not None and emulator.adb is not None:
             if not start_coc(emulator.adb):
-                set_log("Failed to launch Clash of Clans", "ERROR")
+                set_log("Failed to launch Clash of Clans", COLOR_ERROR)
                 return False
 
         return True
@@ -151,20 +152,11 @@ class Bot:
         if self._is_stopped():
             return False
 
-        # Check main screen
-        try:
-            from mybot.game.main_screen import check_main_screen
-            # In production, pass capture_func from android
-            set_log("Checking main screen")
-        except ImportError:
-            pass
+        # Check main screen (not yet implemented — needs vision system)
+        set_log("Checking main screen (stub — vision not yet translated)")
 
-        # Zoom out
-        try:
-            from mybot.android.zoom import zoom_out
-            set_log("Zooming out")
-        except ImportError:
-            pass
+        # Zoom out (not yet implemented — needs ADB touch)
+        set_log("Zoom out (stub — not yet translated)")
 
         # First check (one-time init)
         if self.state.first_start:
@@ -221,6 +213,9 @@ class Bot:
         if self._is_stopped():
             return
 
+        self._collect_count += 1
+        set_log(f"Main loop iteration #{self._collect_count}", COLOR_INFO)
+
         # ── Check main screen ──────────────────────────────────────────
         self._check_main_screen()
         if self._is_stopped():
@@ -250,93 +245,50 @@ class Bot:
             self._attack_cycle()
 
         # ── Idle time ──────────────────────────────────────────────────
-        bot_sleep(2000, self.state.stop_event)
+        set_log("Cycle complete, waiting...", COLOR_INFO)
+        bot_sleep(5000, self.state.stop_event)
 
     def _check_main_screen(self) -> None:
         """Verify bot is on main village screen."""
         try:
             from mybot.game.main_screen import is_main_screen
         except ImportError:
-            pass
+            self.logger.debug("check_main_screen not yet implemented")
 
     def _check_obstacles(self) -> None:
         """Check for and dismiss error dialogs."""
         try:
             from mybot.game.obstacles import check_obstacles
         except ImportError:
-            pass
+            self.logger.debug("check_obstacles not yet implemented")
 
     def _village_report(self) -> None:
         """Read and display village status."""
         try:
             from mybot.village.report import read_village_report
         except ImportError:
-            pass
+            self.logger.debug("village_report not yet implemented")
 
     def _do_collections(self) -> None:
         """Perform resource collections in randomized order.
 
         Translated from the randomized collection block in runBot().
         """
-        collection_tasks = [
-            self._collect_resources,
-            self._check_tombs,
-            self._clean_yard,
-            self._collect_achievements,
-        ]
-        random.shuffle(collection_tasks)
-
-        for task in collection_tasks:
-            if self._is_stopped():
-                return
-            task()
-
-    def _collect_resources(self) -> None:
-        """Collect resources from mines/collectors."""
-        try:
-            from mybot.village.collect import collect_resources
-        except ImportError:
-            pass
-
-    def _check_tombs(self) -> None:
-        """Check and clear hero altar tombs."""
-        pass
-
-    def _clean_yard(self) -> None:
-        """Remove obstacles from village."""
-        pass
-
-    def _collect_achievements(self) -> None:
-        """Collect achievement rewards."""
-        pass
+        self.logger.debug("Collections not yet implemented, skipping")
 
     def _train_and_donate(self) -> None:
         """Training and donation cycle.
 
         Translated from the train/donate/request block in runBot().
         """
-        # Donate CC
-        try:
-            from mybot.village.donate import donate_cc
-        except ImportError:
-            pass
-
-        # Train army
-        try:
-            from mybot.army.train import train_system
-        except ImportError:
-            pass
+        self.logger.debug("Train/donate not yet implemented, skipping")
 
     def _attack_cycle(self) -> None:
         """Execute attack cycle if army is ready.
 
         Translated from AttackCycle(False) call in runBot().
         """
-        try:
-            from mybot.attack.cycle import AttackCycleConfig, attack_cycle
-            self._attack_count += 1
-        except ImportError:
-            pass
+        self.logger.debug("Attack cycle not yet implemented, skipping")
 
     # ── Helpers ────────────────────────────────────────────────────────────
 
