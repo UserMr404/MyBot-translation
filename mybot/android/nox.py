@@ -12,7 +12,7 @@ from pathlib import Path
 
 from mybot.android.adb import _default_adb_path
 from mybot.android.base import BaseEmulator, EmulatorConfig, _read_registry
-from mybot.constants import COLOR_ERROR
+from mybot.constants import COLOR_ERROR, COLOR_WARNING
 from mybot.log import set_debug_log, set_log
 
 # Nox constants (from AndroidNox.au3)
@@ -178,27 +178,48 @@ class Nox(BaseEmulator):
         """Find Nox window by class and title."""
         try:
             import win32gui
-            def _callback(hwnd: int, results: list[int]) -> bool:
-                if not win32gui.IsWindowVisible(hwnd):
-                    return True
-                cls = win32gui.GetClassName(hwnd)
-                title = win32gui.GetWindowText(hwnd)
-                if cls in (_NOX_WINDOW_CLASS, _NOX_WINDOW_CLASS_ALT):
-                    if ("Nox" in title and
-                            (self.config.window_title in title or
-                             self.config.instance in title)):
-                        results.append(hwnd)
-                        return False
-                return True
-
-            results: list[int] = []
-            try:
-                win32gui.EnumWindows(_callback, results)
-            except Exception:
-                pass
-            return results[0] if results else 0
         except ImportError:
+            set_log(
+                "pywin32 is not installed — window detection unavailable. "
+                "Install with: pip install pywin32",
+                COLOR_ERROR,
+            )
             return 0
+
+        candidates: list[tuple[int, str, str]] = []
+
+        def _callback(hwnd: int, results: list[int]) -> bool:
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            cls = win32gui.GetClassName(hwnd)
+            title = win32gui.GetWindowText(hwnd)
+            if cls in (_NOX_WINDOW_CLASS, _NOX_WINDOW_CLASS_ALT) or "Nox" in title:
+                candidates.append((hwnd, cls, title))
+            if cls in (_NOX_WINDOW_CLASS, _NOX_WINDOW_CLASS_ALT):
+                if ("Nox" in title and
+                        (self.config.window_title in title or
+                         self.config.instance in title)):
+                    results.append(hwnd)
+                    return False
+            return True
+
+        results: list[int] = []
+        try:
+            win32gui.EnumWindows(_callback, results)
+        except Exception as e:
+            set_log(f"EnumWindows failed: {e}", COLOR_WARNING)
+
+        if results:
+            set_debug_log(f"Nox window found: HWND={results[0]}")
+            return results[0]
+
+        if candidates:
+            set_debug_log(
+                f"No match for class='{_NOX_WINDOW_CLASS}'/'{_NOX_WINDOW_CLASS_ALT}' "
+                f"title='{self.config.window_title}' or instance='{self.config.instance}'. "
+                f"Candidate windows: {candidates[:5]}"
+            )
+        return 0
 
     def _get_pid_from_window(self) -> int:
         if not self._window_handle:

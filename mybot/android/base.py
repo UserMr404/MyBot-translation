@@ -200,7 +200,23 @@ class BaseEmulator(ABC):
 
         self.config = self.build_config(instance)
         self._adb = None  # Reset ADB client with new config
-        set_debug_log(f"Initialized {self.name} instance '{self.config.instance}'")
+
+        # Check if pywin32 is available for window detection
+        try:
+            import win32gui  # noqa: F401
+        except ImportError:
+            set_log(
+                "WARNING: pywin32 is not installed. Window detection will fail. "
+                "Install with: pip install pywin32",
+                COLOR_ERROR,
+            )
+
+        set_debug_log(
+            f"Initialized {self.name} instance='{self.config.instance}' "
+            f"window_class='{self.config.window_class}' "
+            f"window_title='{self.config.window_title}' "
+            f"adb_device='{self.config.adb_device}'"
+        )
         return True
 
     def open(self, timeout: float = 120.0) -> bool:
@@ -234,15 +250,34 @@ class BaseEmulator(ABC):
 
             # Wait for window to appear
             start = time.monotonic()
+            last_log = 0.0
             while time.monotonic() - start < timeout:
                 hwnd = self._find_window()
                 if hwnd:
                     self._window_handle = hwnd
                     self._pid = self._get_pid_from_window()
+                    elapsed = time.monotonic() - start
+                    set_debug_log(
+                        f"{self.name} window found after {elapsed:.1f}s "
+                        f"(HWND={hwnd}, PID={self._pid})"
+                    )
                     break
+                elapsed = time.monotonic() - start
+                if elapsed - last_log >= 10.0:
+                    set_log(
+                        f"Waiting for {self.name} window... "
+                        f"({elapsed:.0f}s / {timeout:.0f}s)"
+                    )
+                    last_log = elapsed
                 time.sleep(2.0)
             else:
-                set_log(f"{self.name} window did not appear within {timeout}s", COLOR_ERROR)
+                set_log(
+                    f"{self.name} window did not appear within {timeout}s. "
+                    f"Searched for class='{self.config.window_class}' "
+                    f"title='{self.config.window_title}' "
+                    f"instance='{self.config.instance}'",
+                    COLOR_ERROR,
+                )
                 return False
 
         # Connect ADB

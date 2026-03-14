@@ -248,26 +248,49 @@ class BlueStacks5(BaseEmulator):
         """Find BlueStacks window by class and title."""
         try:
             import win32gui
-            def _callback(hwnd: int, results: list[int]) -> bool:
-                if not win32gui.IsWindowVisible(hwnd):
-                    return True
-                cls = win32gui.GetClassName(hwnd)
-                title = win32gui.GetWindowText(hwnd)
-                if cls.startswith("HwndWrapper[BstkPlayer"):
-                    if (self.config.window_title in title or
-                            self.config.instance in title):
-                        results.append(hwnd)
-                        return False
-                return True
-
-            results: list[int] = []
-            try:
-                win32gui.EnumWindows(_callback, results)
-            except Exception:
-                pass
-            return results[0] if results else 0
         except ImportError:
+            set_log(
+                "pywin32 is not installed — window detection unavailable. "
+                "Install with: pip install pywin32",
+                COLOR_ERROR,
+            )
             return 0
+
+        candidates: list[tuple[int, str, str]] = []  # (hwnd, class, title)
+
+        def _callback(hwnd: int, results: list[int]) -> bool:
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            cls = win32gui.GetClassName(hwnd)
+            title = win32gui.GetWindowText(hwnd)
+            # Collect near-misses for diagnostics
+            if cls.startswith("HwndWrapper") or "BlueStacks" in title:
+                candidates.append((hwnd, cls, title))
+            if cls.startswith("HwndWrapper[BstkPlayer"):
+                if (self.config.window_title in title or
+                        self.config.instance in title):
+                    results.append(hwnd)
+                    return False
+            return True
+
+        results: list[int] = []
+        try:
+            win32gui.EnumWindows(_callback, results)
+        except Exception as e:
+            set_log(f"EnumWindows failed: {e}", COLOR_WARNING)
+
+        if results:
+            set_debug_log(f"BlueStacks window found: HWND={results[0]}")
+            return results[0]
+
+        # Log what we did find to help diagnose mismatches
+        if candidates:
+            set_debug_log(
+                f"No match for class='HwndWrapper[BstkPlayer*' "
+                f"title='{self.config.window_title}' or instance='{self.config.instance}'. "
+                f"Candidate windows: {candidates[:5]}"
+            )
+        return 0
 
     def _get_pid_from_window(self) -> int:
         """Get process ID from window handle."""

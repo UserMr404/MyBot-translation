@@ -12,7 +12,7 @@ from pathlib import Path
 
 from mybot.android.adb import _default_adb_path
 from mybot.android.base import BaseEmulator, EmulatorConfig, _read_registry
-from mybot.constants import COLOR_ERROR
+from mybot.constants import COLOR_ERROR, COLOR_WARNING
 from mybot.log import set_debug_log, set_log
 
 # MEmu constants (from AndroidMEmu.au3)
@@ -183,26 +183,47 @@ class MEmu(BaseEmulator):
         """Find MEmu window by class and title."""
         try:
             import win32gui
-            def _callback(hwnd: int, results: list[int]) -> bool:
-                if not win32gui.IsWindowVisible(hwnd):
-                    return True
-                cls = win32gui.GetClassName(hwnd)
-                title = win32gui.GetWindowText(hwnd)
-                if cls == _MEMU_WINDOW_CLASS and "MEmu" in title:
-                    if (self.config.window_title == title or
-                            self.config.instance in title):
-                        results.append(hwnd)
-                        return False
-                return True
-
-            results: list[int] = []
-            try:
-                win32gui.EnumWindows(_callback, results)
-            except Exception:
-                pass
-            return results[0] if results else 0
         except ImportError:
+            set_log(
+                "pywin32 is not installed — window detection unavailable. "
+                "Install with: pip install pywin32",
+                COLOR_ERROR,
+            )
             return 0
+
+        candidates: list[tuple[int, str, str]] = []
+
+        def _callback(hwnd: int, results: list[int]) -> bool:
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            cls = win32gui.GetClassName(hwnd)
+            title = win32gui.GetWindowText(hwnd)
+            if cls == _MEMU_WINDOW_CLASS or "MEmu" in title:
+                candidates.append((hwnd, cls, title))
+            if cls == _MEMU_WINDOW_CLASS and "MEmu" in title:
+                if (self.config.window_title == title or
+                        self.config.instance in title):
+                    results.append(hwnd)
+                    return False
+            return True
+
+        results: list[int] = []
+        try:
+            win32gui.EnumWindows(_callback, results)
+        except Exception as e:
+            set_log(f"EnumWindows failed: {e}", COLOR_WARNING)
+
+        if results:
+            set_debug_log(f"MEmu window found: HWND={results[0]}")
+            return results[0]
+
+        if candidates:
+            set_debug_log(
+                f"No match for class='{_MEMU_WINDOW_CLASS}' "
+                f"title='{self.config.window_title}' or instance='{self.config.instance}'. "
+                f"Candidate windows: {candidates[:5]}"
+            )
+        return 0
 
     def _get_pid_from_window(self) -> int:
         if not self._window_handle:
