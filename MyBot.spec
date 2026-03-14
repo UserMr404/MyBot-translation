@@ -45,6 +45,8 @@ a = Analysis(
         'psutil',
         'configparser',
         'logging.handlers',
+        'PIL',
+        'PIL.Image',
     ],
     hookspath=[],
     hooksconfig={},
