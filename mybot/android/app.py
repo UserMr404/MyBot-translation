@@ -42,11 +42,23 @@ def start_coc(
         True if app started successfully.
     """
     set_log("Starting Clash of Clans...")
+    set_log(f"ADB path: {adb.adb_path}")
+    set_log(f"ADB device: {adb.device}")
+
+    # Verify ADB connectivity first
+    try:
+        devs = adb.devices()
+        set_log(f"ADB devices: {devs}")
+    except AdbError as e:
+        set_log(f"ADB devices query failed: {e}", COLOR_ERROR)
 
     try:
         # Launch the app
-        adb.start_app(package, COC_ACTIVITY)
-        time.sleep(2.0)
+        cmd = f"am start -W -n {package}/{COC_ACTIVITY}"
+        set_log(f"Launch command: {cmd}")
+        result = adb.shell(cmd, timeout=60.0)
+        set_log(f"Launch result: {result}")
+        time.sleep(3.0)
 
         # Verify it's running
         start = time.monotonic()
@@ -54,6 +66,7 @@ def start_coc(
             if is_coc_running(adb, package):
                 set_log("Clash of Clans started", COLOR_SUCCESS)
                 return True
+            set_debug_log("CoC not yet running, waiting...")
             time.sleep(2.0)
 
         set_log("Clash of Clans did not start in time", COLOR_WARNING)
