@@ -26,6 +26,9 @@ htmlcov/
 .coverage
 .mypy_cache/
 
+# Runtime output
+Logs/
+
 # OS
 .DS_Store
 Thumbs.db
