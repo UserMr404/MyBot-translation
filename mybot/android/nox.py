@@ -166,7 +166,10 @@ class Nox(BaseEmulator):
 
         set_debug_log(f"Launching: {' '.join(cmd)}")
         try:
-            return subprocess.Popen(cmd)
+            return subprocess.Popen(
+                cmd,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
         except OSError as e:
             set_log(f"Failed to launch Nox: {e}", COLOR_ERROR)
             return None
