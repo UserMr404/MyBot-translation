@@ -197,6 +197,7 @@ class MainWindow(QMainWindow):
         else:
             status = "Stopped"
         self.bottom_bar.set_status(status)
+        self.bottom_bar.overview.refresh()
 
     # ── Config ─────────────────────────────────────────────────────────────
 
