@@ -139,10 +139,12 @@ class Bot:
             emulator.on_bot_start()
 
         # Launch Clash of Clans (like _RestartAndroidCoC in Android.au3)
-        from mybot.android.app import start_coc
+        from mybot.android.app import is_coc_running, start_coc
         emulator = self._emu_manager.emulator
         if emulator is not None and emulator.adb is not None:
-            if not start_coc(emulator.adb):
+            if is_coc_running(emulator.adb):
+                set_log("Clash of Clans is already running", COLOR_SUCCESS)
+            elif not start_coc(emulator.adb):
                 set_log("Failed to launch Clash of Clans", COLOR_ERROR)
                 return False
 
@@ -260,25 +262,32 @@ class Bot:
         self._check_main_screen()
         if self._is_stopped():
             return
+        bot_sleep(2000, self.state.stop_event)
 
         # ── Check obstacles ────────────────────────────────────────────
         self._check_obstacles()
         if self._is_stopped():
             return
+        bot_sleep(2000, self.state.stop_event)
 
         # ── Village report ─────────────────────────────────────────────
         self._village_report()
+        bot_sleep(2000, self.state.stop_event)
+        if self._is_stopped():
+            return
 
         # ── Collections (randomized order like AutoIt) ─────────────────
         self._do_collections()
         if self._is_stopped():
             return
+        bot_sleep(2000, self.state.stop_event)
 
         # ── Donation / Training / Request cycle ────────────────────────
         if not search_only:
             self._train_and_donate()
             if self._is_stopped():
                 return
+            bot_sleep(2000, self.state.stop_event)
 
         # ── Attack cycle ───────────────────────────────────────────────
         if not search_only and self.state.army.is_full:

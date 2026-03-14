@@ -39,14 +39,15 @@ _SLOW_THRESHOLD = 20       # switch to slower delays after this many attempts
 _MAX_ATTEMPTS = 80         # give up after this many
 
 
-def _is_zoomed_out(adb: AdbClient) -> bool:
+def _is_zoomed_out(adb: AdbClient) -> bool | None:
     """Verify the game is fully zoomed out using template matching.
 
     Checks for ZoomOut indicator templates. If the indicator is NOT found,
     we're zoomed out enough. If found, need to zoom more.
 
     Returns:
-        True if zoomed out or can't determine (assume OK).
+        True if confirmed zoomed out, False if not zoomed out,
+        None if verification is not possible (no templates/capture failure).
     """
     try:
         from mybot.android.capture import ScreenCapture
@@ -56,11 +57,11 @@ def _is_zoomed_out(adb: AdbClient) -> bool:
         capture = ScreenCapture(adb=adb)
         image = capture.capture_full()
         if image is None:
-            return True  # Can't verify, assume OK
+            return None  # Can't verify
 
         zoom_dir = resolve_img_dir("imgxml/other/ZoomOut")
         if not zoom_dir.is_dir():
-            return True  # No templates, assume OK
+            return None  # No templates, can't verify
 
         result = find_multiple(image, zoom_dir, confidence=0.80, max_results=1)
         if result.found:
@@ -69,7 +70,7 @@ def _is_zoomed_out(adb: AdbClient) -> bool:
         return True
     except Exception as e:
         set_debug_log(f"ZoomOut: verification error: {e}")
-        return True  # Assume OK on error
+        return None  # Can't verify on error
 
 
 def zoom_out(
@@ -106,16 +107,22 @@ def zoom_out(
     try:
         _android_zoom_out(adb)
         time.sleep(_DELAY_VERIFY)
-        if verify and _is_zoomed_out(adb):
-            set_debug_log("ZoomOut: verified after initial ADB zoom")
-            return True
+        if verify:
+            status = _is_zoomed_out(adb)
+            if status is True:
+                set_debug_log("ZoomOut: verified after initial ADB zoom")
+                return True
+            # status is None (can't verify) or False — continue with key presses
     except AdbError as e:
         set_debug_log(f"ZoomOut: ADB zoom failed: {e}, falling back to key method")
 
-    # Main loop: send zoom key presses with verification
+    # Always send a minimum number of key presses to ensure zoom-out,
+    # even when verification is unavailable (no templates).
+    min_presses = 15
+    verified = False
+
     for attempt in range(max_attempts):
         try:
-            # Send zoom-out key press based on emulator
             _send_zoom_key(adb, emulator)
         except AdbError as e:
             set_debug_log(f"ZoomOut: key press failed: {e}")
@@ -126,17 +133,33 @@ def zoom_out(
         else:
             time.sleep(_DELAY_BETWEEN)
 
-        # Verify periodically (every 5 key presses, not every single one)
-        if verify and (attempt + 1) % 5 == 0:
+        # After minimum presses, verify periodically (every 5 key presses)
+        if verify and attempt >= min_presses and (attempt + 1) % 5 == 0:
             time.sleep(_DELAY_VERIFY)
-            if _is_zoomed_out(adb):
+            status = _is_zoomed_out(adb)
+            if status is True:
                 set_debug_log(
                     f"ZoomOut: verified after {attempt + 1} key presses"
                 )
+                verified = True
                 return True
-            set_debug_log(
-                f"ZoomOut: not zoomed out after {attempt + 1} attempts"
-            )
+            if status is False:
+                set_debug_log(
+                    f"ZoomOut: not zoomed out after {attempt + 1} attempts"
+                )
+            # status is None — can't verify, keep going until min_presses done
+
+        # If we can't verify but have done enough presses, assume success
+        if not verify and attempt >= min_presses:
+            return True
+        if attempt >= min_presses and not verified:
+            status = _is_zoomed_out(adb)
+            if status is None:
+                # No verification available, trust that enough presses worked
+                set_debug_log(
+                    f"ZoomOut: completed {attempt + 1} key presses (unverified)"
+                )
+                return True
 
     if not verify:
         return True
