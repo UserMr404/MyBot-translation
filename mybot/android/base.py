@@ -226,6 +226,11 @@ class BaseEmulator(ABC):
             set_log(f"{self.name} did not finish booting within {timeout}s", COLOR_ERROR)
             return False
 
+        # Configure screen resolution to match imgxml templates (860x732 @ 240dpi)
+        if not self.setup_screen():
+            set_log(f"Failed to configure {self.name} screen resolution", COLOR_ERROR)
+            return False
+
         self._is_open = True
         set_log(f"{self.name} opened successfully", COLOR_SUCCESS)
         return True
