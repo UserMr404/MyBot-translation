@@ -44,6 +44,7 @@ a = Analysis(
         'numpy',
         'psutil',
         'configparser',
+        'logging.handlers',
     ],
     hookspath=[],
     hooksconfig={},
