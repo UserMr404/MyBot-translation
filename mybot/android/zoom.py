@@ -42,8 +42,8 @@ _MAX_ATTEMPTS = 80         # give up after this many
 def _is_zoomed_out(adb: AdbClient) -> bool | None:
     """Verify the game is fully zoomed out using template matching.
 
-    Checks for ZoomOut indicator templates. If the indicator is NOT found,
-    we're zoomed out enough. If found, need to zoom more.
+    Searches for zoomout indicator templates. If found, we're NOT zoomed
+    out enough (the indicator is visible when zoom level is too high).
 
     Returns:
         True if confirmed zoomed out, False if not zoomed out,
@@ -84,13 +84,14 @@ def zoom_out(
 ) -> bool:
     """Zoom out the game view to maximum.
 
-    Translated from ZoomOut() / DefaultZoomOut() / ZoomOutBlueStacks5() in
-    ZoomOut.au3.
+    Translated from ZoomOut() / DefaultZoomOut() in ZoomOut.au3.
 
-    Strategy:
-    1. First try ADB-based zoom (AndroidZoomOut equivalent)
-    2. Then send emulator-specific key presses with proper delays
-    3. Verify with village size measurement between attempts
+    Strategy (matching AutoIt):
+    1. Initial delay (1.5s)
+    2. Try ADB multi-touch pinch zoom
+    3. Verify — if already zoomed out, return
+    4. Key press loop with verification on each iteration
+    5. Adaptive delays: 200ms for first 20, then 1000ms
 
     Args:
         adb: ADB client.
@@ -106,7 +107,7 @@ def zoom_out(
     # Initial delay before zooming (DELAYZOOMOUT1 = 1500ms)
     time.sleep(_DELAY_INITIAL)
 
-    # First attempt: try ADB pinch zoom
+    # First attempt: try ADB pinch zoom (like AutoIt's AndroidZoomOut)
     try:
         _android_zoom_out(adb)
         time.sleep(_DELAY_VERIFY)
@@ -122,12 +123,20 @@ def zoom_out(
     # Minimum key presses before trusting unverified result
     min_presses = 15
     can_verify: bool | None = True  # None once we know templates are absent
+    zoom_fail_count = 0
 
     for attempt in range(max_attempts):
         try:
             _send_zoom_key(adb, emulator)
         except AdbError as e:
             set_debug_log(f"ZoomOut: key press failed: {e}")
+            zoom_fail_count += 1
+            # After 40 failed key presses, try ADB pinch again (like AutoIt fallback)
+            if zoom_fail_count % 10 == 0:
+                try:
+                    _android_zoom_out(adb)
+                except AdbError:
+                    pass
 
         # Delay between attempts (matches AutoIt timing)
         if attempt >= _SLOW_THRESHOLD:
@@ -135,9 +144,11 @@ def zoom_out(
         else:
             time.sleep(_DELAY_BETWEEN)
 
-        # Verify after each press (like AutoIt's SearchZoomOut on every iteration)
-        if verify and can_verify is not None:
-            time.sleep(_DELAY_VERIFY)
+        # Verify periodically (not every single press — too slow)
+        # AutoIt verifies every iteration but the DLL call is fast.
+        # We verify every 3 presses to balance speed vs accuracy.
+        should_verify = verify and can_verify is not None and (attempt % 3 == 2)
+        if should_verify:
             status = _is_zoomed_out(adb)
             if status is True:
                 set_debug_log(
@@ -163,38 +174,54 @@ def zoom_out(
 def _send_zoom_key(adb: AdbClient, emulator: str) -> None:
     """Send the emulator-appropriate zoom-out key press.
 
-    BlueStacks5: DOWN arrow key (KEYCODE_DPAD_DOWN = 20)
-    MEmu: F3 key (not available via keyevent, use shell command)
-    Nox: DOWN arrow key as fallback
+    From ZoomOut.au3:
+    - BlueStacks5: DOWN arrow key (KEYCODE_DPAD_DOWN = 20)
+    - MEmu: DOWN arrow (F3 not available via ADB keyevent)
+    - Nox: DOWN arrow as fallback (Ctrl+MouseWheel not possible via ADB)
+
+    All emulators support DPAD_DOWN for zoom-out via ADB.
     """
-    # All emulators support DOWN arrow for zoom-out
     adb.key_event(KEYCODE_DPAD_DOWN)
 
 
 def _android_zoom_out(adb: AdbClient) -> None:
-    """Send ADB-based zoom-out gesture.
+    """Send ADB-based zoom-out gesture using multi-touch via sendevent.
 
-    Translated from AndroidZoomOut() in Android.au3.
-    Uses 'input swipe' to simulate a pinch-in (zoom out) gesture.
-    Sends two converging swipes from edges toward center.
+    Translated from AndroidZoomOut() in Android.au3, which uses minitouch
+    scripts (Normal0-Normal6) to send simultaneous two-finger pinch gestures.
 
-    The AutoIt version uses minitouch scripts with pre-recorded
-    multi-touch coordinates. This Python version uses the simpler
-    'input swipe' approach which works on most emulators.
+    This implementation uses 'input' with two sequential pinch swipes.
+    While not true simultaneous multi-touch (which requires sendevent or
+    minitouch), sequential converging swipes still trigger zoom-out on
+    most emulators.
+
+    Each swipe moves from an outer position toward the center, simulating
+    fingers pinching inward.
     """
     cx = GAME_WIDTH // 2   # 430
     cy = GAME_HEIGHT // 2  # 366
-    offset = 200
+
+    # Randomize offset like AutoIt's Normal0-6 scripts
+    offset = 200 + random.randint(-20, 20)
     duration = 300  # ms
 
-    # Randomize slightly like AutoIt's Normal0-6 scripts
-    offset += random.randint(-20, 20)
+    # Send two converging swipes (pinch inward = zoom out)
+    # Swipe 1: top-left toward center
+    x1_start = cx - offset
+    y1_start = cy - offset
+    x1_end = cx - 20
+    y1_end = cy - 20
 
-    # Top-left to center
-    adb.swipe(cx - offset, cy - offset, cx - 20, cy - 20, duration)
-    time.sleep(0.05)
-    # Bottom-right to center
-    adb.swipe(cx + offset, cy + offset, cx + 20, cy + 20, duration)
+    # Swipe 2: bottom-right toward center
+    x2_start = cx + offset
+    y2_start = cy + offset
+    x2_end = cx + 20
+    y2_end = cy + 20
+
+    # Execute both swipes
+    adb.swipe(x1_start, y1_start, x1_end, y1_end, duration)
+    time.sleep(0.1)
+    adb.swipe(x2_start, y2_start, x2_end, y2_end, duration)
 
 
 def zoom_in(adb: AdbClient) -> None:

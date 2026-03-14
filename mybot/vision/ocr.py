@@ -34,7 +34,61 @@ class OcrResult:
     region: tuple[int, int, int, int] = (0, 0, 0, 0)  # x, y, w, h
 
 
+# Scale factor for upscaling small crops before OCR.
+# pytesseract works much better on larger images (recommended min ~32px height).
+# CoC UI text is typically 16-18px tall, so 3x gives ~48-54px.
+_OCR_SCALE = 3
+
+
 # ── Core OCR Functions ───────────────────────────────────────────────────────
+
+def _preprocess_game_text(crop: np.ndarray) -> np.ndarray:
+    """Preprocess CoC game text for OCR.
+
+    The game renders white/yellow numbers with dark outlines and drop shadows
+    on colored HUD backgrounds. This pipeline:
+    1. Converts to HSV and isolates bright pixels (the actual text)
+    2. Scales up the small crop for better pytesseract accuracy
+    3. Applies morphological close to fill gaps in characters
+    4. Returns a clean binary image (white text on black)
+
+    This replaces the simple OTSU threshold which fails on game screenshots
+    because the colored background confuses automatic threshold selection.
+    """
+    if crop.size == 0:
+        return crop
+
+    h, w = crop.shape[:2]
+
+    # Convert to HSV and extract Value (brightness) channel.
+    # Game text (white/yellow) has high V regardless of hue.
+    if crop.ndim == 3:
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        _, _, v_channel = cv2.split(hsv)
+    else:
+        v_channel = crop
+
+    # Threshold on brightness: game text is bright (V > ~180) while
+    # backgrounds and shadows are darker.
+    # Use a fixed threshold rather than OTSU since we know text is bright.
+    _, bright_mask = cv2.threshold(v_channel, 180, 255, cv2.THRESH_BINARY)
+
+    # Scale up for better OCR accuracy
+    scaled = cv2.resize(
+        bright_mask,
+        (w * _OCR_SCALE, h * _OCR_SCALE),
+        interpolation=cv2.INTER_CUBIC,
+    )
+
+    # Morphological close to fill small gaps in characters
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    cleaned = cv2.morphologyEx(scaled, cv2.MORPH_CLOSE, kernel)
+
+    # Re-threshold after scaling (interpolation introduces gray pixels)
+    _, binary = cv2.threshold(cleaned, 127, 255, cv2.THRESH_BINARY)
+
+    return binary
+
 
 def read_text(
     image: np.ndarray,
@@ -45,7 +99,7 @@ def read_text(
     lang: str = "coc-latin",
     whitelist: str = "",
     remove_space: bool = False,
-    preprocess: str = "threshold",
+    preprocess: str = "game",
 ) -> str:
     """Read text from a screen region using OCR.
 
@@ -63,7 +117,8 @@ def read_text(
         lang: OCR language/template name (e.g., "coc-latin", "coc-A", "coc-Gold").
         whitelist: Allowed characters (e.g., "0123456789" for numbers only).
         remove_space: Remove spaces from result.
-        preprocess: Preprocessing method: "threshold", "adaptive", "invert", "none".
+        preprocess: Preprocessing method: "game" (default), "threshold", "adaptive",
+                     "invert", "none".
 
     Returns:
         Recognized text string (empty string on failure).
@@ -77,18 +132,26 @@ def read_text(
         return ""
 
     crop = image[y:y2, x:x2]
-    processed = _preprocess_for_ocr(crop, preprocess)
+
+    if preprocess == "game":
+        processed = _preprocess_game_text(crop)
+    else:
+        processed = _preprocess_for_ocr(crop, preprocess)
 
     try:
         import pytesseract
 
-        config = "--psm 7"  # Single text line mode
+        # PSM 7 = single text line; PSM 8 = single word (better for short numbers)
+        psm = 8 if width < 80 else 7
+        config = f"--psm {psm}"
         if whitelist:
             config += f" -c tessedit_char_whitelist={whitelist}"
 
         text = pytesseract.image_to_string(processed, config=config).strip()
         if remove_space:
             text = text.replace(" ", "")
+
+        set_debug_log(f"OCR [{x},{y},{width},{height}] raw='{text}'")
         return text
 
     except ImportError:
@@ -168,19 +231,20 @@ def get_trophy_search(image: np.ndarray) -> int:
 
 # Main screen resources
 # Coordinates from VillageReport.au3: getResourcesMainScreen(696, 23) etc.
+# Width=110 from AutoIt getOcr.au3 (getResourcesMainScreen uses 110x16)
 def get_gold_main(image: np.ndarray) -> int:
     """Read gold on main screen. Replaces getResourcesMainScreen(696, 23)."""
-    return read_number(image, 696, 23, 100, 18)
+    return read_number(image, 696, 23, 110, 16)
 
 
 def get_elixir_main(image: np.ndarray) -> int:
     """Read elixir on main screen. Replaces getResourcesMainScreen(696, 74)."""
-    return read_number(image, 696, 74, 100, 18)
+    return read_number(image, 696, 74, 110, 16)
 
 
 def get_dark_elixir_main(image: np.ndarray) -> int:
     """Read dark elixir on main screen. Replaces getResourcesMainScreen(728, 123)."""
-    return read_number(image, 728, 123, 100, 18)
+    return read_number(image, 728, 123, 110, 16)
 
 
 def get_trophy_main(image: np.ndarray) -> int:
@@ -194,24 +258,37 @@ def get_gem_count(image: np.ndarray, has_dark_elixir: bool = True) -> int:
     The gem position shifts depending on whether Dark Elixir storage exists.
     """
     if has_dark_elixir:
-        return read_number(image, 740, 171, 100, 18)
-    return read_number(image, 740, 123, 100, 18)
+        return read_number(image, 740, 171, 110, 16)
+    return read_number(image, 740, 123, 110, 16)
 
 
 # Builder count
 # Coordinates from ScreenCoordinates.au3: $aBuildersDigits=[424, 21]
+# Width=40 from AutoIt getOcr.au3 (getBuilders uses 40x18)
 def get_builder_count(image: np.ndarray) -> tuple[int, int]:
     """Read builder count "X/Y" from main screen.
 
     Translated from getBuilderCount() in getBuilderCount.au3.
+    AutoIt uses: getOcrAndCapture("coc-Builders", 424, 21, 40, 18, True)
+    Width is 40px (not 60) — wider captures background noise causing misreads.
 
     Returns:
         (free_builders, total_builders) tuple.
     """
-    text = read_text(image, 424, 21, 60, 18, whitelist="0123456789/")
-    match = re.match(r"(\d+)\s*/\s*(\d+)", text)
+    text = read_text(
+        image, 424, 21, 40, 18,
+        whitelist="0123456789/",
+        remove_space=True,
+    )
+    set_debug_log(f"Builder OCR raw: '{text}'")
+    match = re.match(r"(\d+)/(\d+)", text)
     if match:
-        return int(match.group(1)), int(match.group(2))
+        free = int(match.group(1))
+        total = int(match.group(2))
+        # Sanity check: total builders is always 2-7 in CoC
+        if 1 <= total <= 7 and 0 <= free <= total:
+            return free, total
+        set_debug_log(f"Builder count out of range: {free}/{total}, rejecting")
     return 0, 0
 
 
