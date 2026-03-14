@@ -53,11 +53,25 @@ def start_coc(
         set_log(f"ADB devices query failed: {e}", COLOR_ERROR)
 
     try:
-        # Launch the app
+        # Check if CoC is installed first
+        pm_output = adb.shell(f"pm path {package}", timeout=10.0)
+        if "package:" not in pm_output:
+            set_log(f"Clash of Clans ({package}) is not installed on this device", COLOR_ERROR)
+            set_log(f"pm path output: '{pm_output}'")
+            return False
+        set_log(f"CoC installed: {pm_output}")
+
+        # Launch the app using _run directly to capture stderr
         cmd = f"am start -W -n {package}/{COC_ACTIVITY}"
         set_log(f"Launch command: {cmd}")
-        result = adb.shell(cmd, timeout=60.0)
-        set_log(f"Launch result: {result}")
+        result = adb._run(
+            ["shell", cmd], timeout=60.0, check=False
+        )
+        set_log(f"Launch stdout: {result.stdout.strip()}")
+        if result.stderr.strip():
+            set_log(f"Launch stderr: {result.stderr.strip()}", COLOR_WARNING)
+        if result.returncode != 0:
+            set_log(f"Launch exit code: {result.returncode}", COLOR_WARNING)
         time.sleep(3.0)
 
         # Verify it's running
