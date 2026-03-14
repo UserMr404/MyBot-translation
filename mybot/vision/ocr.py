@@ -310,12 +310,173 @@ def _preprocess_for_ocr(image: np.ndarray, method: str = "threshold") -> np.ndar
 
 
 def _template_ocr(image: np.ndarray, whitelist: str = "") -> str:
-    """Fallback OCR using template matching for individual characters.
+    """OCR using contour segmentation and multi-scale template matching.
 
-    Uses the character templates from lib/listSymbols_coc-*.xml if available.
-    This is a simplified version — for production use, pytesseract is recommended.
+    Since the original listSymbols_coc-*.xml files use a proprietary MBRBot.dll
+    format, this implementation:
+    1. Thresholds the image to get binary text
+    2. Finds individual character contours
+    3. Normalizes each character to a fixed height
+    4. Matches against digit templates rendered at that same fixed height
+
+    Works best for the white/yellow numeric text the game uses for resource
+    amounts, troop counts, timers, etc.
     """
-    # Template OCR is a fallback; return empty for now
-    # Full implementation would load character templates and match them
-    set_debug_log("Template OCR not yet implemented — install pytesseract")
-    return ""
+    # Ensure grayscale
+    if image.ndim == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    h_img, w_img = gray.shape
+    if h_img < 6 or w_img < 4:
+        return ""
+
+    # Determine if text is light-on-dark or dark-on-light
+    mean_val = np.mean(gray)
+    if mean_val > 127:
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    else:
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # Find contours (each character should be a separate contour)
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return ""
+
+    # Filter and sort contours left-to-right
+    char_boxes: list[tuple[int, int, int, int]] = []
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        if h < h_img * 0.25 or w < 2 or h < 3:
+            continue
+        char_boxes.append((x, y, w, h))
+
+    if not char_boxes:
+        return ""
+
+    char_boxes.sort(key=lambda b: b[0])
+
+    # Use a fixed target height for normalization
+    target_h = _NORM_H
+    allowed = set(whitelist) if whitelist else None
+    templates = _get_normalized_templates(allowed)
+
+    result_chars: list[str] = []
+
+    for x, y, w, h in char_boxes:
+        char_img = binary[y:y + h, x:x + w]
+
+        # Resize to fixed height, preserving aspect ratio
+        aspect = w / h
+        new_w = max(2, round(target_h * aspect))
+        char_resized = cv2.resize(char_img, (new_w, target_h), interpolation=cv2.INTER_AREA)
+
+        best_char = ""
+        best_score = -1.0
+
+        for char, tmpl_list in templates.items():
+            for tmpl in tmpl_list:
+                th, tw = tmpl.shape
+                # Pad whichever is narrower so both have the same width
+                if tw == new_w:
+                    t = tmpl
+                    c = char_resized
+                elif tw < new_w:
+                    pad = new_w - tw
+                    t = cv2.copyMakeBorder(tmpl, 0, 0, 0, pad, cv2.BORDER_CONSTANT, value=0)
+                    c = char_resized
+                else:
+                    pad = tw - new_w
+                    c = cv2.copyMakeBorder(char_resized, 0, 0, 0, pad, cv2.BORDER_CONSTANT, value=0)
+                    t = tmpl
+
+                # Compute similarity via normalized correlation
+                t_f = t.astype(np.float32)
+                c_f = c.astype(np.float32)
+                norm_t = np.linalg.norm(t_f)
+                norm_c = np.linalg.norm(c_f)
+                if norm_t < 1e-6 or norm_c < 1e-6:
+                    continue
+                score = float(np.sum(t_f * c_f) / (norm_t * norm_c))
+
+                if score > best_score:
+                    best_score = score
+                    best_char = char
+
+        if best_score > 0.45 and best_char:
+            result_chars.append(best_char)
+
+    return "".join(result_chars)
+
+
+# ── Digit Template Generation ────────────────────────────────────────────────
+
+_NORM_H = 32  # Fixed height for normalized character comparison
+_norm_templates: dict[str, list[np.ndarray]] | None = None
+
+
+def _get_normalized_templates(
+    allowed: set[str] | None = None,
+) -> dict[str, list[np.ndarray]]:
+    """Get digit templates normalized to _NORM_H height.
+
+    Generates multiple variants per character using different fonts and
+    thicknesses for robustness. Each template is cropped to its tight
+    bounding box and resized to _NORM_H, preserving aspect ratio.
+
+    Returns:
+        Dict mapping character -> list of template images (binary, height=_NORM_H).
+    """
+    global _norm_templates
+    if _norm_templates is not None:
+        if allowed:
+            return {k: v for k, v in _norm_templates.items() if k in allowed}
+        return _norm_templates
+
+    chars = "0123456789/"
+    templates: dict[str, list[np.ndarray]] = {c: [] for c in chars}
+
+    fonts = [
+        cv2.FONT_HERSHEY_SIMPLEX,
+        cv2.FONT_HERSHEY_DUPLEX,
+        cv2.FONT_HERSHEY_COMPLEX_SMALL,
+    ]
+
+    for char in chars:
+        seen_shapes: set[tuple[int, int]] = set()
+        for font in fonts:
+            for scale in (0.8, 1.0, 1.2):
+                for thickness in (1, 2):
+                    # Render character on a big canvas
+                    canvas = np.zeros((60, 40), dtype=np.uint8)
+                    (tw, th), _ = cv2.getTextSize(char, font, scale, thickness)
+                    ox = (40 - tw) // 2
+                    oy = (60 + th) // 2
+                    cv2.putText(canvas, char, (ox, oy), font, scale, 255, thickness)
+
+                    # Crop to tight bounding box
+                    coords = cv2.findNonZero(canvas)
+                    if coords is None:
+                        continue
+                    bx, by, bw, bh = cv2.boundingRect(coords)
+                    cropped = canvas[by:by + bh, bx:bx + bw]
+
+                    # Resize to normalized height, preserving aspect ratio
+                    aspect = bw / bh
+                    new_w = max(2, round(_NORM_H * aspect))
+                    resized = cv2.resize(cropped, (new_w, _NORM_H), interpolation=cv2.INTER_AREA)
+                    _, resized = cv2.threshold(resized, 127, 255, cv2.THRESH_BINARY)
+
+                    # Skip near-duplicate shapes
+                    shape_key = (new_w, int(np.count_nonzero(resized) / 10))
+                    if shape_key in seen_shapes:
+                        continue
+                    seen_shapes.add(shape_key)
+
+                    templates[char].append(resized)
+
+    _norm_templates = templates
+    if allowed:
+        return {k: v for k, v in templates.items() if k in allowed}
+    return templates

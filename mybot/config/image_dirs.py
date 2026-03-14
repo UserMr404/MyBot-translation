@@ -6,7 +6,7 @@ Resolved to absolute paths at runtime via resolve().
 
 from pathlib import Path
 
-from mybot.utils.paths import get_base_dir
+from mybot.utils.paths import exe_dir, get_base_dir
 
 # Set at startup to the base directory
 _script_dir: Path | None = None
@@ -21,11 +21,24 @@ def set_script_dir(path: Path) -> None:
 def resolve(relative: str) -> Path:
     """Resolve a relative imgxml path to absolute.
 
-    Uses the explicitly set script dir, falling back to the
-    PyInstaller-aware base dir from utils.paths.
+    Resolution order:
+    1. Explicitly set script dir (if set via set_script_dir)
+    2. Next to the executable (exe_dir) — for PyInstaller builds where
+       imgxml is placed alongside the .exe rather than bundled inside it
+    3. PyInstaller-aware base dir (sys._MEIPASS or repo root)
     """
-    base = _script_dir if _script_dir is not None else get_base_dir()
-    return base / relative
+    if _script_dir is not None:
+        candidate = _script_dir / relative
+        if candidate.exists():
+            return candidate
+
+    # Check next to the exe first (dist/ folder layout)
+    exe_candidate = exe_dir() / relative
+    if exe_candidate.exists():
+        return exe_candidate
+
+    # Fall back to bundled/repo base dir
+    return get_base_dir() / relative
 
 
 # ── Windows ──────────────────────────────────────────────────────────────────

@@ -21,7 +21,8 @@ ROOT = Path(SPECPATH)
 # At runtime sys._MEIPASS is on sys.path, so Python imports mybot normally.
 datas = [
     (str(ROOT / 'mybot'), 'mybot'),
-    (str(ROOT / 'MyBot' / 'imgxml'), 'imgxml'),
+    # imgxml is NOT bundled — it lives next to the exe in the dist/ folder.
+    # The bot resolves imgxml paths via exe_dir() at runtime.
     (str(ROOT / 'MyBot' / 'Languages'), 'Languages'),
     (str(ROOT / 'MyBot' / 'CSV'), 'CSV'),
     (str(ROOT / 'MyBot' / 'images'), 'images'),
