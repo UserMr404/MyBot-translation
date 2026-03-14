@@ -19,6 +19,7 @@ from mybot.log import set_debug_log, set_log
 _BS5_REG_KEY = r"SOFTWARE\BlueStacks_nxt"
 _BS5_REG_KEY_USER = r"SOFTWARE\BlueStacks_nxt"
 _BS5_WINDOW_CLASS = "HwndWrapper[BstkPlayer*"
+_BS5_WINDOW_CLASS_QT = "Qt672QWindowIcon"  # Newer BlueStacks versions use Qt
 _BS5_PROCESS = "HD-Player.exe"
 _BS5_FRONTEND = "BlueStacks X.exe"
 _BS5_DEFAULT_PORT = 5555
@@ -147,11 +148,13 @@ class BlueStacks5(BaseEmulator):
         adb_path = self.get_adb_path() or _default_adb_path()
         port = self._get_instance_port(instance)
 
-        # Window title pattern: "BlueStacks App Player" or instance-specific
+        # Window title pattern varies by BlueStacks version:
+        #   Legacy: "BlueStacks App Player" / "BlueStacks App Player Pie64"
+        #   Current: "BlueStacks5-Pie64" / "BlueStacks5-Nougat64"
         if instance == "Nougat64":
-            window_title = "BlueStacks App Player"
+            window_title = "BlueStacks"
         else:
-            window_title = f"BlueStacks App Player {instance}"
+            window_title = "BlueStacks"
 
         return EmulatorConfig(
             name="BlueStacks5",
@@ -264,11 +267,16 @@ class BlueStacks5(BaseEmulator):
             cls = win32gui.GetClassName(hwnd)
             title = win32gui.GetWindowText(hwnd)
             # Collect near-misses for diagnostics
-            if cls.startswith("HwndWrapper") or "BlueStacks" in title:
-                candidates.append((hwnd, cls, title))
-            if cls.startswith("HwndWrapper[BstkPlayer"):
-                if (self.config.window_title in title or
-                        self.config.instance in title):
+            if cls.startswith("HwndWrapper") or "BlueStacks" in title or "Qt" in cls:
+                if "BlueStacks" in title or "BstkPlayer" in cls:
+                    candidates.append((hwnd, cls, title))
+            # Match legacy class (HwndWrapper[BstkPlayer*) or new Qt class
+            is_bs_class = (
+                cls.startswith("HwndWrapper[BstkPlayer")
+                or (cls.startswith("Qt") and cls.endswith("QWindowIcon"))
+            )
+            if is_bs_class and "BlueStacks" in title:
+                if self.config.instance in title:
                     results.append(hwnd)
                     return False
             return True
