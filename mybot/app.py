@@ -122,6 +122,7 @@ class App:
             self._qapp = QApplication.instance() or QApplication(sys.argv)
             from mybot.gui.main_window import MainWindow
             self.gui = MainWindow(self.state, self.bot)
+            self.gui.set_app(self)
         except ImportError:
             self.logger.warning("PyQt6 not available — running headless")
             self.state.gui_mode = 0

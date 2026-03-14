@@ -12,6 +12,7 @@ from __future__ import annotations
 import random
 import time
 
+from mybot.android.manager import EmulatorManager
 from mybot.enums import BotAction
 from mybot.log import get_logger, set_log
 from mybot.state import BotState
@@ -29,6 +30,7 @@ class Bot:
         self.logger = get_logger()
         self._attack_count = 0
         self._collect_count = 0
+        self._emu_manager: EmulatorManager | None = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -67,6 +69,10 @@ class Bot:
         self.state.running = False
         self.state.action = BotAction.STOP
 
+        if self._emu_manager is not None:
+            self._emu_manager.close()
+            self._emu_manager = None
+
     def search_mode(self) -> None:
         """Run in search-only mode (translated from BotSearchMode).
 
@@ -87,16 +93,33 @@ class Bot:
     def _open_android(self) -> bool:
         """Open the Android emulator (translated from OpenAndroid).
 
-        In full implementation, delegates to mybot.android.manager.
+        Uses EmulatorManager to select and launch the configured emulator.
         """
         set_log("Opening Android emulator")
 
-        try:
-            from mybot.android.manager import open_android
-            return open_android(self.state)
-        except ImportError:
-            self.logger.debug("Android manager not fully available — simulating")
-            return True
+        self._emu_manager = EmulatorManager()
+
+        emulator_name = self.state.android.emulator
+        instance = self.state.android.instance
+
+        if emulator_name:
+            set_log(f"Selecting emulator: {emulator_name}")
+            if not self._emu_manager.select(emulator_name, instance):
+                set_log(f"Failed to initialize {emulator_name}", "ERROR")
+                return False
+        else:
+            set_log("No emulator configured — auto-detecting")
+            if not self._emu_manager.auto_detect():
+                set_log("No supported Android emulator found", "ERROR")
+                return False
+
+        set_log("Launching emulator...")
+        if not self._emu_manager.open():
+            set_log("Failed to open Android emulator", "ERROR")
+            return False
+
+        set_log("Android emulator opened successfully")
+        return True
 
     def initiate(self) -> bool:
         """Initiate bot operation (translated from Initiate in MyBot.run.au3).
