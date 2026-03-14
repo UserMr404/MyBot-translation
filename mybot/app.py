@@ -25,7 +25,7 @@ from mybot.config.reader import read_config
 from mybot.enums import BotAction
 from mybot.log import get_logger, setup_logging
 from mybot.state import BotState
-from mybot.utils.paths import init_base_dir
+from mybot.utils.paths import exe_dir, init_base_dir
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -92,8 +92,8 @@ class App:
         elif getattr(args, "minigui", False):
             self.state.gui_mode = 2
 
-        # Initialize logging
-        log_dir = self._profiles_dir / profile_name / "logs"
+        # Initialize logging — log files go next to the .exe in Logs/
+        log_dir = exe_dir() / "Logs"
         self.logger = setup_logging(
             log_dir=log_dir,
             debug=args.debug,

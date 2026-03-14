@@ -67,6 +67,17 @@ def resource_path(relative: str | Path) -> Path:
     return get_base_dir() / relative
 
 
+def exe_dir() -> Path:
+    """Get the directory containing the running executable.
+
+    When frozen (PyInstaller), returns the folder containing the .exe.
+    When running from source, returns the repository root.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return get_base_dir()
+
+
 def data_dir(name: str) -> Path:
     """Get path to a top-level data directory.
 
