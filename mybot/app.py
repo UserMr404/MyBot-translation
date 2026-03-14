@@ -226,6 +226,7 @@ class App:
         """Signal the bot to stop."""
         self.state.action = BotAction.STOP
         self.state.stop_event.set()
+        self.state.running = False
 
     def _bot_worker(self) -> None:
         """Bot thread worker."""

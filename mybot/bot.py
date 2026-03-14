@@ -119,6 +119,15 @@ class Bot:
             return False
 
         set_log("Android emulator opened successfully")
+
+        # Launch Clash of Clans (like _RestartAndroidCoC in Android.au3)
+        from mybot.android.app import start_coc
+        emulator = self._emu_manager.emulator
+        if emulator is not None and emulator.adb is not None:
+            if not start_coc(emulator.adb):
+                set_log("Failed to launch Clash of Clans", "ERROR")
+                return False
+
         return True
 
     def initiate(self) -> bool:
