@@ -174,14 +174,83 @@ class BlueStacks5(BaseEmulator):
             shortcut_name="BlueStacks 5",
         )
 
-    def set_screen_config(self) -> bool:
-        """No-op — BlueStacks config is managed by the user.
+    def _read_conf(self) -> tuple[Path | None, list[str]]:
+        """Read bluestacks.conf lines. Returns (path, lines)."""
+        data_dir = self._get_data_dir()
+        if not data_dir:
+            return None, []
+        conf = data_dir / "bluestacks.conf"
+        if not conf.exists():
+            return None, []
+        try:
+            return conf, conf.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return None, []
 
-        Modifying bluestacks.conf before launch was causing BlueStacks
-        to throw errors on startup. Users should configure resolution
-        and settings through the BlueStacks UI instead.
+    def _write_conf(self, conf_path: Path, lines: list[str]) -> bool:
+        """Write bluestacks.conf lines back to disk."""
+        try:
+            conf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return True
+        except OSError as e:
+            set_log(f"Failed to write bluestacks.conf: {e}", COLOR_ERROR)
+            return False
+
+    def ensure_adb_enabled(self) -> bool:
+        """Check and enable ADB access in bluestacks.conf if disabled.
+
+        BlueStacks 5 requires ``bst.enable_adb_access="1"`` in
+        ``bluestacks.conf`` for ADB to work.  The original AutoIt bot
+        assumed the user had already toggled this in the BlueStacks UI.
+        This method does it automatically so the bot can connect.
+
+        Must be called **before** BlueStacks is launched, because
+        BlueStacks reads this config at startup.
+
+        Returns:
+            True if ADB is (now) enabled, False on error.
         """
+        conf_path, lines = self._read_conf()
+        if conf_path is None:
+            set_debug_log("Cannot find bluestacks.conf — skipping ADB enable check")
+            return True  # optimistic: maybe ADB is already on
+
+        adb_key = 'bst.enable_adb_access='
+        found = False
+        changed = False
+        for i, line in enumerate(lines):
+            if line.startswith(adb_key):
+                found = True
+                if '"1"' not in line:
+                    set_log(
+                        "ADB is disabled in BlueStacks settings — enabling automatically",
+                        COLOR_WARNING,
+                    )
+                    lines[i] = 'bst.enable_adb_access="1"'
+                    changed = True
+                else:
+                    set_debug_log("ADB is already enabled in bluestacks.conf")
+                break
+
+        if not found:
+            set_log("ADB setting missing from bluestacks.conf — adding it", COLOR_WARNING)
+            lines.append('bst.enable_adb_access="1"')
+            changed = True
+
+        if changed:
+            if not self._write_conf(conf_path, lines):
+                return False
+            set_log("ADB enabled in bluestacks.conf", COLOR_SUCCESS)
         return True
+
+    def set_screen_config(self) -> bool:
+        """Ensure ADB is enabled before launch.
+
+        Screen resolution is managed by the user through the BlueStacks UI,
+        but ADB access must be enabled for the bot to communicate with the
+        emulator.
+        """
+        return self.ensure_adb_enabled()
 
     def on_bot_start(self) -> None:
         """Event called when the bot starts.
