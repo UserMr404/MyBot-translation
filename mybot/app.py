@@ -117,6 +117,9 @@ class App:
         if self.state.gui_mode == 0:
             return
         try:
+            from PyQt6.QtWidgets import QApplication
+            # QApplication must exist before any QWidget is created
+            self._qapp = QApplication.instance() or QApplication(sys.argv)
             from mybot.gui.main_window import MainWindow
             self.gui = MainWindow(self.state, self.bot)
         except ImportError:
@@ -199,14 +202,11 @@ class App:
 
     def _run_gui(self) -> int:
         """Run with GUI event loop."""
-        try:
-            from PyQt6.QtWidgets import QApplication
-            app = QApplication.instance() or QApplication(sys.argv)
-            self.gui.show()  # type: ignore[union-attr]
-            return app.exec()
-        except ImportError:
-            self.logger.error("PyQt6 not available")
-            return 1
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication.instance()
+        assert app is not None, "QApplication must be created in _init_gui()"
+        self.gui.show()  # type: ignore[union-attr]
+        return app.exec()
 
     def start_bot_async(self) -> None:
         """Start the bot in a background thread (for GUI mode)."""
