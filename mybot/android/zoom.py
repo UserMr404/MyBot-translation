@@ -59,11 +59,14 @@ def _is_zoomed_out(adb: AdbClient) -> bool | None:
         if image is None:
             return None  # Can't verify
 
-        zoom_dir = resolve_img_dir("imgxml/other/ZoomOut")
+        zoom_dir = resolve_img_dir("imgxml/zoomout")
         if not zoom_dir.is_dir():
+            set_debug_log(f"ZoomOut: template dir not found: {zoom_dir}")
             return None  # No templates, can't verify
 
         result = find_multiple(image, zoom_dir, confidence=0.80, max_results=1)
+        # Templates detect "not zoomed out" state. If found → need more zoom.
+        # If NOT found → we're zoomed out enough.
         if result.found:
             set_debug_log("ZoomOut: zoom indicator still visible, need more zoom")
             return False
@@ -116,10 +119,9 @@ def zoom_out(
     except AdbError as e:
         set_debug_log(f"ZoomOut: ADB zoom failed: {e}, falling back to key method")
 
-    # Always send a minimum number of key presses to ensure zoom-out,
-    # even when verification is unavailable (no templates).
+    # Minimum key presses before trusting unverified result
     min_presses = 15
-    verified = False
+    can_verify: bool | None = True  # None once we know templates are absent
 
     for attempt in range(max_attempts):
         try:
@@ -133,36 +135,26 @@ def zoom_out(
         else:
             time.sleep(_DELAY_BETWEEN)
 
-        # After minimum presses, verify periodically (every 5 key presses)
-        if verify and attempt >= min_presses and (attempt + 1) % 5 == 0:
+        # Verify after each press (like AutoIt's SearchZoomOut on every iteration)
+        if verify and can_verify is not None:
             time.sleep(_DELAY_VERIFY)
             status = _is_zoomed_out(adb)
             if status is True:
                 set_debug_log(
                     f"ZoomOut: verified after {attempt + 1} key presses"
                 )
-                verified = True
                 return True
-            if status is False:
-                set_debug_log(
-                    f"ZoomOut: not zoomed out after {attempt + 1} attempts"
-                )
-            # status is None — can't verify, keep going until min_presses done
-
-        # If we can't verify but have done enough presses, assume success
-        if not verify and attempt >= min_presses:
-            return True
-        if attempt >= min_presses and not verified:
-            status = _is_zoomed_out(adb)
             if status is None:
-                # No verification available, trust that enough presses worked
-                set_debug_log(
-                    f"ZoomOut: completed {attempt + 1} key presses (unverified)"
-                )
-                return True
+                # Templates unavailable — stop trying to verify
+                can_verify = None
+                set_debug_log("ZoomOut: no templates, switching to unverified mode")
 
-    if not verify:
-        return True
+        # If we can't verify, fall back to minimum press count
+        if (not verify or can_verify is None) and attempt >= min_presses:
+            set_debug_log(
+                f"ZoomOut: completed {attempt + 1} key presses (unverified)"
+            )
+            return True
 
     set_log("ZoomOut failed after all attempts", COLOR_ERROR)
     return False

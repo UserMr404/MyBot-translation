@@ -145,53 +145,61 @@ def read_number(
 # Each had hardcoded region coordinates and language parameters.
 
 # Resource amounts during village search (attack search screen)
+# Coordinates from GetResources.au3: getGoldVillageSearch(48, 69+7)=48,76 etc.
 def get_gold_search(image: np.ndarray) -> int:
     """Read gold amount during village search. Replaces getGoldVillageSearch()."""
-    return read_number(image, 31, 108, 150, 18)
+    return read_number(image, 48, 76, 100, 18)
 
 
 def get_elixir_search(image: np.ndarray) -> int:
     """Read elixir amount during village search. Replaces getElixirVillageSearch()."""
-    return read_number(image, 31, 134, 150, 18)
+    return read_number(image, 48, 105, 100, 18)
 
 
 def get_dark_elixir_search(image: np.ndarray) -> int:
     """Read dark elixir during village search. Replaces getDarkElixirVillageSearch()."""
-    return read_number(image, 31, 160, 110, 18)
+    return read_number(image, 48, 133, 100, 18)
 
 
 def get_trophy_search(image: np.ndarray) -> int:
     """Read trophy count during search. Replaces getTrophyVillageSearch()."""
-    return read_number(image, 31, 186, 80, 18)
+    return read_number(image, 48, 175, 80, 18)
 
 
 # Main screen resources
+# Coordinates from VillageReport.au3: getResourcesMainScreen(696, 23) etc.
 def get_gold_main(image: np.ndarray) -> int:
-    """Read gold on main screen. Replaces getGoldMainScreen()."""
-    return read_number(image, 463, 36, 100, 18)
+    """Read gold on main screen. Replaces getResourcesMainScreen(696, 23)."""
+    return read_number(image, 696, 23, 100, 18)
 
 
 def get_elixir_main(image: np.ndarray) -> int:
-    """Read elixir on main screen. Replaces getElixirMainScreen()."""
-    return read_number(image, 463, 84, 100, 18)
+    """Read elixir on main screen. Replaces getResourcesMainScreen(696, 74)."""
+    return read_number(image, 696, 74, 100, 18)
 
 
 def get_dark_elixir_main(image: np.ndarray) -> int:
-    """Read dark elixir on main screen. Replaces getDarkElixirMainScreen()."""
-    return read_number(image, 463, 132, 100, 18)
+    """Read dark elixir on main screen. Replaces getResourcesMainScreen(728, 123)."""
+    return read_number(image, 728, 123, 100, 18)
 
 
 def get_trophy_main(image: np.ndarray) -> int:
-    """Read trophies on main screen. Replaces getTrophyMainScreen()."""
-    return read_number(image, 75, 16, 60, 18)
+    """Read trophies on main screen. From ScreenCoordinates.au3: $aTrophies=[69, 84]."""
+    return read_number(image, 69, 84, 60, 18)
 
 
-def get_gem_count(image: np.ndarray) -> int:
-    """Read gem count. Replaces getGemMainScreen()."""
-    return read_number(image, 785, 16, 60, 18)
+def get_gem_count(image: np.ndarray, has_dark_elixir: bool = True) -> int:
+    """Read gem count. From VillageReport.au3: getResourcesMainScreen(740, 171/123).
+
+    The gem position shifts depending on whether Dark Elixir storage exists.
+    """
+    if has_dark_elixir:
+        return read_number(image, 740, 171, 100, 18)
+    return read_number(image, 740, 123, 100, 18)
 
 
 # Builder count
+# Coordinates from ScreenCoordinates.au3: $aBuildersDigits=[424, 21]
 def get_builder_count(image: np.ndarray) -> tuple[int, int]:
     """Read builder count "X/Y" from main screen.
 
@@ -200,7 +208,7 @@ def get_builder_count(image: np.ndarray) -> tuple[int, int]:
     Returns:
         (free_builders, total_builders) tuple.
     """
-    text = read_text(image, 274, 16, 50, 18, whitelist="0123456789/")
+    text = read_text(image, 424, 21, 60, 18, whitelist="0123456789/")
     match = re.match(r"(\d+)\s*/\s*(\d+)", text)
     if match:
         return int(match.group(1)), int(match.group(2))
