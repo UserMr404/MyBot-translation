@@ -107,7 +107,9 @@ class BlueStacks5(BaseEmulator):
 
         instances = []
         for entry in engine_dir.iterdir():
-            if entry.is_dir() and entry.name.startswith("Nougat"):
+            if entry.is_dir() and (
+                entry.name.startswith("Nougat") or entry.name.startswith("Pie")
+            ):
                 instances.append(entry.name)
 
         return sorted(instances) if instances else ["Nougat64"]
