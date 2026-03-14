@@ -63,6 +63,8 @@ class VillageState:
     town_hall_level: int = 0
     free_builder_count: int = 0
     total_builder_count: int = 0
+    gob_builder_present: bool = False
+    gob_builder_offset: int = 0  # 355 when goblin builder is active (shifts lab UI)
     gems: int = 0
 
 

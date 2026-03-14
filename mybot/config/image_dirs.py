@@ -74,6 +74,8 @@ TRADER = "imgxml/other/Trader"
 DONATE_CC = "imgxml/DonateCC"
 LAB_RESEARCH = "imgxml/Research/Laboratory"
 HERO_EQUIPMENT = "imgxml/ArmyOverview/HeroEquipment"
+GOB_BUILDER = "imgxml/village/Page/MainVillage"  # GobBuilder icon on main screen
+GOB_BUILDER_LAB = "imgxml/Research"  # GobBuilder icon in lab window
 
 # ── Clan Capital ─────────────────────────────────────────────────────────────
 CC_MAP = "imgxml/ClanCapital/Map"
