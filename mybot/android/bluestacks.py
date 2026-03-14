@@ -7,6 +7,7 @@ BlueStacks 5 uses Hyper-V backend and stores config in registry + JSON.
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 from mybot.android.adb import _default_adb_path
@@ -223,11 +224,23 @@ class BlueStacks5(BaseEmulator):
         cmd = [str(exe), "--instance", self.config.instance]
         set_debug_log(f"Launching: {' '.join(cmd)}")
 
-        try:
-            return subprocess.Popen(cmd)
-        except OSError as e:
-            set_log(f"Failed to launch BlueStacks: {e}", COLOR_ERROR)
-            return None
+        # Retry up to 3 times matching AutoIt LaunchAndroid() behaviour
+        for attempt in range(1, 4):
+            try:
+                proc = subprocess.Popen(cmd, cwd=str(self.config.path))
+            except OSError as e:
+                set_log(f"Failed to launch BlueStacks (attempt {attempt}): {e}", COLOR_ERROR)
+                proc = None
+
+            # Wait 3 seconds then verify the process is still alive
+            time.sleep(3)
+            if proc and proc.poll() is None:
+                # Post-launch settle delay (10s, matching AutoIt)
+                time.sleep(10)
+                return proc
+
+        set_log("BlueStacks failed to start after 3 attempts", COLOR_ERROR)
+        return None
 
     def _find_window(self) -> int:
         """Find BlueStacks window by class and title."""
