@@ -150,8 +150,8 @@ class _ScriptSelector(QGroupBox):
         self.lbl_notes = QLabel("")
         self.lbl_notes.setWordWrap(True)
         self.lbl_notes.setStyleSheet(
-            "QLabel { background-color: #f5f5f5; padding: 4px; "
-            "border: 1px solid #ddd; font-size: 11px; }"
+            "QLabel { background-color: #2B2B2B; color: #CCCCCC; padding: 4px; "
+            "border: 1px solid #555; font-size: 11px; }"
         )
         layout.addWidget(self.lbl_notes)
 
