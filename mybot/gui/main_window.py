@@ -187,8 +187,14 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def _update_status(self) -> None:
-        """Periodic status update."""
-        if self.state.running:
+        """Periodic status update.
+
+        Also syncs button enabled states with actual bot running state,
+        so buttons re-enable even if the bot thread exits on its own
+        (e.g. due to an error) without going through _on_stop.
+        """
+        running = self.state.running
+        if running:
             status = "Running"
             if self.state.paused:
                 status = "Paused"
@@ -197,6 +203,7 @@ class MainWindow(QMainWindow):
         else:
             status = "Stopped"
         self.bottom_bar.set_status(status)
+        self.bottom_bar.set_running(running)
         self.bottom_bar.overview.refresh()
 
     # ── Config ─────────────────────────────────────────────────────────────

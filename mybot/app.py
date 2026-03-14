@@ -216,11 +216,24 @@ class App:
     def start_bot_async(self) -> None:
         """Start the bot in a background thread (for GUI mode)."""
         assert self.bot is not None
-        if self._bot_thread and self._bot_thread.is_alive():
-            return
 
+        # Wait for the previous bot thread to finish before starting a new one
+        if self._bot_thread is not None:
+            if self._bot_thread.is_alive():
+                self.logger.info("Waiting for previous bot thread to finish...")
+                self._bot_thread.join(timeout=10.0)
+                if self._bot_thread.is_alive():
+                    self.logger.warning("Previous bot thread did not stop in time")
+                    return
+            self._bot_thread = None
+
+        # Reset state for a fresh start
         self.state.action = BotAction.START
         self.state.stop_event.clear()
+        self.state.running = False
+        self.state.paused = False
+        self.state.restart = False
+
         self._bot_thread = threading.Thread(
             target=self._bot_worker, name="BotThread", daemon=True,
         )
