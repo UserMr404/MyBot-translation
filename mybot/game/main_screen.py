@@ -21,7 +21,7 @@ from mybot.config.coordinates import (
     IS_ON_BUILDER_BASE,
 )
 from mybot.config.image_dirs import resolve as resolve_img_dir
-from mybot.constants import MID_OFFSET_Y
+from mybot.constants import COLOR_WARNING, MID_OFFSET_Y
 from mybot.log import set_debug_log, set_log
 
 
@@ -66,6 +66,16 @@ def is_main_screen(
     pixel = IS_ON_BUILDER_BASE if builder_base else IS_MAIN
 
     if not _check_pixel_tuple(image, pixel):
+        # Log the actual pixel color for debugging when the check fails
+        x, y, expected, tol = pixel
+        if image is not None and 0 <= y < image.shape[0] and 0 <= x < image.shape[1]:
+            b, g, r = image[y, x][:3]
+            actual_hex = f"0x{r:02X}{g:02X}{b:02X}"
+            expected_hex = f"0x{expected:06X}"
+            set_debug_log(
+                f"Main screen pixel mismatch at ({x},{y}): "
+                f"expected {expected_hex} (tol={tol}), got {actual_hex}"
+            )
         return False
 
     # Additional verification: check for network reconnecting overlay
@@ -176,6 +186,7 @@ def wait_main_screen(
 
     start = time.time()
     attempts = 0
+    last_progress_log = 0.0
 
     while time.time() - start < max_wait:
         attempts += 1
@@ -189,6 +200,16 @@ def wait_main_screen(
         # Periodically check obstacles
         if image is not None and attempts % 5 == 0:
             check_obstacles(image, click_func, builder_base=builder_base)
+
+        # Log progress every 30 seconds so it doesn't appear stuck
+        elapsed = time.time() - start
+        if elapsed - last_progress_log >= 30.0:
+            set_log(
+                f"Still waiting for main screen... "
+                f"({elapsed:.0f}s / {max_wait:.0f}s, {attempts} checks)",
+                COLOR_WARNING,
+            )
+            last_progress_log = elapsed
 
         time.sleep(check_interval)
 

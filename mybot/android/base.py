@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from mybot.android.adb import AdbClient
-from mybot.constants import COLOR_ERROR, COLOR_SUCCESS
+from mybot.constants import COLOR_ERROR, COLOR_SUCCESS, COLOR_WARNING
 from mybot.log import set_debug_log, set_log
 
 
@@ -347,15 +347,49 @@ class BaseEmulator(ABC):
     def setup_screen(self) -> bool:
         """Configure emulator screen for the game.
 
-        Sets resolution to 860x732 (game area) and DPI to 240.
+        Checks current resolution and DPI, corrects them if they don't
+        match the expected 860x732 @ 240dpi, and verifies the change.
         Replaces InitiateLayout() display setup portion.
 
         Returns:
             True if screen setup succeeded.
         """
+        target_w = self.config.screen_width
+        target_h = self.config.screen_height
+        target_dpi = self.config.dpi
+
         try:
-            self.adb.set_wm_size(self.config.screen_width, self.config.screen_height)
-            self.adb.set_wm_density(self.config.dpi)
+            # Check current resolution
+            current = self.adb.get_wm_size()
+            if current:
+                cur_w, cur_h = current
+                if cur_w == target_w and cur_h == target_h:
+                    set_debug_log(f"Screen resolution already {cur_w}x{cur_h}")
+                else:
+                    set_log(
+                        f"Screen resolution {cur_w}x{cur_h} does not match "
+                        f"expected {target_w}x{target_h}, resizing...",
+                    )
+                    self.adb.set_wm_size(target_w, target_h)
+                    # Verify the change took effect
+                    time.sleep(1.0)
+                    verify = self.adb.get_wm_size()
+                    if verify and verify[0] == target_w and verify[1] == target_h:
+                        set_log(
+                            f"Screen resized to {target_w}x{target_h}",
+                            COLOR_SUCCESS,
+                        )
+                    else:
+                        set_log(
+                            f"Screen resize may not have taken effect "
+                            f"(got {verify}), continuing anyway",
+                            COLOR_WARNING,
+                        )
+            else:
+                set_log("Could not read screen size, setting resolution...")
+                self.adb.set_wm_size(target_w, target_h)
+
+            self.adb.set_wm_density(target_dpi)
             self.adb.set_font_scale(1.0)
             return True
         except Exception as e:

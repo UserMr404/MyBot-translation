@@ -87,8 +87,16 @@ class ColorConsoleHandler(logging.StreamHandler):  # type: ignore[type-arg]
 
     def emit(self, record: logging.LogRecord) -> None:
         color = self._LEVEL_COLORS.get(record.levelno, "")
-        record.msg = f"{color}{record.msg}{self._RESET}" if color else record.msg
-        super().emit(record)
+        if color:
+            # Format the message with ANSI codes for this handler only,
+            # without mutating record.msg (which would leak ANSI codes
+            # into other handlers like the GUI LogHandler).
+            original_msg = record.msg
+            record.msg = f"{color}{record.msg}{self._RESET}"
+            super().emit(record)
+            record.msg = original_msg
+        else:
+            super().emit(record)
 
 
 # Module-level logger
